@@ -283,9 +283,14 @@ def test_pick_link_gate_flow(con, client):
     assert "pick link" in locked.text.lower()
     # Bad token -> /locked.
     assert client.get("/submit/bad-token", follow_redirects=False).status_code == 303
-    # Good token -> cookie set, lands on the pick page.
+    # Good token -> cookie set, lands on the dashboard.
     r = client.get(f"/submit/{m['pick_token']}", follow_redirects=False)
     assert r.status_code == 303
+    assert r.headers["location"] == "/dashboard"
+    # Signed-in home also lands on the dashboard.
+    home = client.get("/", follow_redirects=False)
+    assert home.status_code == 303
+    assert home.headers["location"] == "/dashboard"
     page = client.get("/picks")
     assert page.status_code == 200
     assert "Roman Anthony" in page.text

@@ -91,7 +91,7 @@ def index(request: Request):
     member = _current_member(request)
     if member is None:
         return RedirectResponse("/locked", status_code=303)
-    return RedirectResponse("/picks", status_code=303)
+    return RedirectResponse("/dashboard", status_code=303)
 
 
 @app.get("/submit/{token}")
@@ -103,7 +103,7 @@ def submit_link(token: str):
         con.close()
     if member is None:
         return RedirectResponse("/locked", status_code=303)
-    resp = RedirectResponse("/picks", status_code=303)
+    resp = RedirectResponse("/dashboard", status_code=303)
     resp.set_cookie(COOKIE_NAME, token, max_age=COOKIE_DAYS * 86400,
                     httponly=True, path="/")
     return resp

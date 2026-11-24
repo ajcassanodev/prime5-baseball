@@ -188,10 +188,10 @@ def test_approval_activates_and_issues_working_link(con, client, admin_env):
     m = dbmod.member_by_id(con, m["id"])
     assert m["status"] == "active"
     assert m["is_active"] == 1
-    # The pick link now signs the member in.
+    # The pick link now signs the member in and lands on the dashboard.
     r = client.get(f"/submit/{m['pick_token']}", follow_redirects=False)
     assert r.status_code == 303
-    assert r.headers["location"] == "/picks"
+    assert r.headers["location"] == "/dashboard"
 
 
 def test_approval_succeeds_without_mail_configured(con, client, admin_env,
