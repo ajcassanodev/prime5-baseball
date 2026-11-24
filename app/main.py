@@ -65,8 +65,21 @@ def _current_week_or_none(con):
     return season, week
 
 
+# Cache-busting for the stylesheet (Nov 24, 2026): browsers cached the
+# old style.css after the header redesign and showed the new header
+# unstyled. The version is the file's mtime, read at process start — a
+# deploy restarts the service, so changed CSS always gets a fresh
+# version and browsers fetch it once.
+_STYLE_PATH = os.path.join(os.path.dirname(__file__), "static", "style.css")
+try:
+    CSS_VERSION = str(int(os.path.getmtime(_STYLE_PATH)))
+except OSError:
+    CSS_VERSION = "1"
+
+
 def _render(request, name, context, status_code=200):
     """TemplateResponse with the current Starlette signature."""
+    context = {**context, "css_version": CSS_VERSION}
     return templates.TemplateResponse(request, name, context,
                                       status_code=status_code)
 

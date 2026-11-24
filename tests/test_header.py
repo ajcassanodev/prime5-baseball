@@ -21,3 +21,12 @@ def test_header_matches_football_site(client):
     # The old plain-text header is gone.
     assert '<span class="brand">PRIME5 BASEBALL</span>' not in page.text
     assert 'class="top"' not in page.text
+
+
+def test_stylesheet_link_is_versioned(client):
+    # Nov 24, 2026: browsers cached the old style.css after the header
+    # redesign and showed the new header unstyled. The link carries the
+    # CSS file's mtime so a deploy forces one fresh fetch.
+    page = client.get("/register")
+    assert page.status_code == 200
+    assert "/static/style.css?v=" in page.text
