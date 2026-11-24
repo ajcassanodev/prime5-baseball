@@ -233,6 +233,9 @@ def test_header_settings_button_only_when_signed_in(con, client):
     page = client.get("/dashboard")
     assert page.status_code == 200
     assert 'id="settingsBtn"' in page.text
+    # The button is a gear icon, not a text label.
+    assert 'aria-label="Settings"' in page.text
+    assert "<svg" in page.text
     assert 'id="fullNameSwitch"' in page.text
     assert "Show my full name" in page.text
     # The description uses the member's own names.

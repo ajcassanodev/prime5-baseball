@@ -36,20 +36,23 @@ nav a { color: var(--muted); text-decoration: none; font-weight: 500; font-size:
 nav a:hover { color: var(--text); background: rgba(255,255,255,.05); }
 @media (max-width: 640px) {
   .brand span { font-size: 16px; }
-  nav { margin-left: 0; width: 100%; }
+  nav { margin-left: 0; width: 100%; order: 3; }
   nav a { padding: .75rem .6rem; font-size: .92rem; min-height: 44px; display: inline-flex; align-items: center; }
-  .settings { margin-left: 0; }
-  .settings-btn { padding: .75rem .6rem; min-height: 44px; }
+  /* Gear stays on the top row, far right, while the nav drops below. */
+  .settings { margin-left: auto; order: 2; }
+  .settings-btn { width: 44px; height: 44px; }
 }
 /* Header settings dropdown (screen names, Nov 24, 2026). */
 .settings { position: relative; margin-left: 12px; }
 .settings-btn {
-  background: var(--surface); color: var(--text);
-  border: 1px solid var(--border); border-radius: 8px;
-  padding: .45rem .75rem; font-size: .95rem; font-weight: 500;
-  cursor: pointer; font-family: inherit;
+  background: transparent; color: var(--muted);
+  border: none; border-radius: 50%;
+  width: 40px; height: 40px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
 }
-.settings-btn:hover { background: rgba(255,255,255,.05); }
+.settings-btn:hover { background: rgba(255,255,255,.05); color: var(--text); }
+.settings-btn svg { width: 22px; height: 22px; }
 .settings-panel {
   position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
   width: 300px; max-width: calc(100vw - 32px);
