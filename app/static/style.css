@@ -31,10 +31,18 @@ h1 { font-size: 20px; margin: 4px 0 2px; }
 h2 { font-size: 15px; margin: 18px 0 6px; }
 .sub { color: var(--muted); font-size: 13px; }
 .game-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; width: 100%; text-align: left; cursor: pointer;
   font-weight: 700; font-size: 13px; color: var(--muted);
-  margin: 12px 0 4px; padding-top: 8px;
-  border-top: 1px solid var(--border);
+  margin: 12px 0 4px; padding: 8px 2px 0;
+  background: none; border: none; border-top: 1px solid var(--border);
+  border-radius: 0; font-family: inherit;
 }
+.game-head:hover { color: var(--text); }
+.game-head .game-count { font-weight: 400; font-size: 12px; flex: none; }
+.game-head .chev { color: var(--accent); flex: none; }
+.game-rows.collapsed { display: none; }
+.game-rows[hidden] { display: none; }
 .game-head:first-of-type { border-top: none; padding-top: 0; }
 .row {
   display: flex; align-items: center; gap: 8px; width: 100%;
@@ -158,3 +166,32 @@ table.admin td.actions { white-space: nowrap; text-align: right; }
 .welcome-actions { display: flex; gap: 8px; }
 .welcome-actions .btn.secondary { visibility: hidden; }
 .welcome-actions .btn.secondary.show { visibility: visible; }
+
+/* Pick-page redesign (Nov 24, 2026): sticky lineup bar, search,
+   collapsible game groups, picked-player chips. */
+.sticky-bar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg); padding: 10px 0 8px;
+  border-bottom: 1px solid var(--border); margin-bottom: 4px;
+}
+.pick-search {
+  width: 100%; padding: 10px 11px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface-muted);
+  color: var(--text); font-size: 14px; margin-bottom: 8px;
+}
+.pick-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pick-tools .lineup-only {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 13px; color: var(--muted); cursor: pointer;
+}
+.pick-tools .sub { margin-left: auto; }
+.sticky-bar .btn { flex: none; padding: 8px 14px; }
+.sticky-bar .btn.secondary { padding: 8px 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chips:empty { display: none; }
+.chip {
+  font-size: 12px; padding: 4px 8px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--surface-muted);
+  color: var(--text);
+}
+.chip.pitcher { border-style: dashed; }

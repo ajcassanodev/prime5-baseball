@@ -21,9 +21,28 @@
   <input type="hidden" name="batter_5_game" id="f_b5_game" value="0">
   <input type="hidden" name="pitcher" id="f_p" value="0">
 
+  {# Sticky lineup bar: search + filters + live picks stay visible while
+     scrolling the (long) player list. Lock lives here, not at the bottom. #}
+  <div class="sticky-bar">
+    <input type="search" id="pickSearch" class="pick-search"
+           placeholder="Search players…" autocomplete="off" aria-label="Search players">
+    <div class="pick-tools">
+      <label class="lineup-only"><input type="checkbox" id="lineupOnly"> In lineup only</label>
+      <span class="sub" id="lineupSummary"></span>
+      <button type="button" class="btn secondary" id="clearBtn">Clear</button>
+      <button type="submit" class="btn" id="lockBtn">Lock picks</button>
+    </div>
+    <div class="chips" id="pickChips"></div>
+  </div>
+
   <h2>Batters — pick 5 <span class="sub" id="bCount"></span></h2>
   {% for g in groups %}
-    <div class="game-head">{{ g.label }} · {{ g.time_et }} ET{% if g.status == "Final" %} · Final{% endif %}</div>
+    <button type="button" class="game-head" data-game-toggle="b-{{ g.game_pk }}" data-count-label="batters" aria-expanded="{{ 'true' if loop.first else 'false' }}">
+      <span>{{ g.label }} · {{ g.time_et }} ET{% if g.status == "Final" %} · Final{% endif %}</span>
+      <span class="game-count" data-count-for="b-{{ g.game_pk }}">{{ g.batters|length }} batters</span>
+      <span class="chev">{{ '▾' if loop.first else '▸' }}</span>
+    </button>
+    <div class="game-rows{% if not loop.first %} collapsed{% endif %}" data-game-rows="b-{{ g.game_pk }}">
     {% for b in g.batters %}
     <button type="button" class="row batter-row" data-id="{{ b.mlb_id }}" data-game="{{ b.game_pk }}" data-slot="{{ b.slot or '' }}">
       <span class="num"></span>
@@ -33,11 +52,17 @@
       <span class="right">{% if b.status == "out" %}Not in lineup{% elif b.points is not none %}{{ b.hits }} H · {{ '%g'|format(b.points) }} pts{% else %}—{% endif %}</span>
     </button>
     {% endfor %}
+    </div>
   {% endfor %}
 
   <h2>Pitcher — pick 1</h2>
   {% for g in groups %}
-    <div class="game-head">{{ g.label }} · {{ g.time_et }} ET{% if g.status == "Final" %} · Final{% endif %}</div>
+    <button type="button" class="game-head" data-game-toggle="p-{{ g.game_pk }}" data-count-label="pitchers" aria-expanded="{{ 'true' if loop.first else 'false' }}">
+      <span>{{ g.label }} · {{ g.time_et }} ET{% if g.status == "Final" %} · Final{% endif %}</span>
+      <span class="game-count" data-count-for="p-{{ g.game_pk }}">{{ g.pitchers|length }} pitchers</span>
+      <span class="chev">{{ '▾' if loop.first else '▸' }}</span>
+    </button>
+    <div class="game-rows{% if not loop.first %} collapsed{% endif %}" data-game-rows="p-{{ g.game_pk }}">
     {% for p in g.pitchers %}
     <button type="button" class="row pitcher-row" data-id="{{ p.mlb_id }}" data-game="{{ p.game_pk }}" data-slot="{{ p.slot or '' }}">
       <span class="num"></span>
@@ -47,15 +72,11 @@
       <span class="right">{% if p.points is not none %}{{ p.pitches }} pitches · {{ p.strikeouts }} K · {{ '%.2f'|format(p.points) }} pts{% else %}—{% endif %}</span>
     </button>
     {% endfor %}
+    </div>
   {% endfor %}
 
   <div class="card">
-    <div><b>Your lineup</b> <span class="sub" id="lineupSummary"></span></div>
-    <div style="display:flex;gap:8px;margin-top:10px;">
-      <button type="submit" class="btn" id="lockBtn">Lock picks</button>
-      <button type="button" class="btn secondary" id="clearBtn">Clear</button>
-    </div>
-    <p class="sub" style="margin:8px 0 0;">Picks lock at each game's first pitch. Editing a pick for a game that has not started is free.</p>
+    <p class="sub" style="margin:0;">Picks lock at each game's first pitch. Editing a pick for a game that has not started is free.</p>
   </div>
 </form>
 
@@ -157,8 +178,9 @@ function render() {
   }
   document.getElementById('f_p').value = pitcher || 0;
   document.getElementById('lineupSummary').textContent =
-    picked.length + ' batters' + (pitcher ? ' + pitcher' : ' · no pitcher yet');
+    picked.length + '/5 batters · ' + (pitcher ? 'pitcher ✓' : 'no pitcher yet');
   document.getElementById('lockBtn').disabled = !(picked.length === 5 && pitcher);
+  renderChips();
 }
 batterRows.forEach(r => r.addEventListener('click', () => {
   const pair = pairOf(r);
@@ -176,5 +198,104 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   batters.length = 0; pitcher = null; render();
 });
 render();
+
+// --- Pick-page redesign: search, lineup-only filter, collapsible games,
+// sticky-bar chips. Extends render() above; the pick logic is untouched. ---
+
+// Collapse state per group ("b-<game_pk>" / "p-<game_pk>"): the user's
+// own open/closed choices. The server renders the first game of each
+// section open, the rest closed.
+const collapsed = {};
+document.querySelectorAll('[data-game-rows]').forEach(c => {
+  collapsed[c.dataset.gameRows] = c.classList.contains('collapsed');
+});
+const searchInput = document.getElementById('pickSearch');
+const lineupOnly = document.getElementById('lineupOnly');
+
+function rowVisible(row, q) {
+  if (q) {
+    const name = row.querySelector('.main b').textContent.toLowerCase();
+    if (!name.includes(q)) return false;
+  }
+  if (lineupOnly.checked) {
+    const dot = row.querySelector('.dot');
+    if (dot && dot.classList.contains('out')) return false;
+  }
+  return true;
+}
+
+function applyFilters() {
+  const q = searchInput.value.trim().toLowerCase();
+  const searching = q.length > 0;
+  document.querySelectorAll('[data-game-rows]').forEach(container => {
+    const key = container.dataset.gameRows;
+    const rows = [...container.querySelectorAll('.row')];
+    let visible = 0;
+    rows.forEach(r => {
+      const show = rowVisible(r, q);
+      r.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    const head = document.querySelector('[data-game-toggle="' + key + '"]');
+    const countEl = head.querySelector('[data-count-for]');
+    countEl.textContent = visible + ' ' + head.dataset.countLabel;
+    container.hidden = visible === 0;
+    // While searching, groups with matches auto-expand; clearing the
+    // query restores the user's own collapse state.
+    const isCollapsed = searching ? false : collapsed[key];
+    container.classList.toggle('collapsed', isCollapsed);
+    head.setAttribute('aria-expanded', String(!isCollapsed));
+    head.querySelector('.chev').textContent = isCollapsed ? '▸' : '▾';
+  });
+}
+
+document.querySelectorAll('[data-game-toggle]').forEach(head => {
+  head.addEventListener('click', () => {
+    const key = head.dataset.gameToggle;
+    collapsed[key] = !collapsed[key];
+    applyFilters();
+  });
+});
+searchInput.addEventListener('input', applyFilters);
+lineupOnly.addEventListener('change', applyFilters);
+// Enter in the search box must not submit the pick form.
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') e.preventDefault();
+});
+
+// Picked-player chips in the sticky bar; tapping one removes the pick.
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function renderChips() {
+  const chips = document.getElementById('pickChips');
+  const html = [];
+  batters.filter(Boolean).forEach(pair => {
+    const row = batterRows.find(r => pairOf(r) === pair);
+    const name = row ? row.querySelector('.main b').textContent : pair;
+    html.push('<button type="button" class="chip" data-remove-batter="'
+      + escHtml(pair) + '">' + escHtml(name) + ' ×</button>');
+  });
+  if (pitcher) {
+    const row = pitcherRows.find(r => parseInt(r.dataset.id, 10) === pitcher);
+    const name = row ? row.querySelector('.main b').textContent : String(pitcher);
+    html.push('<button type="button" class="chip pitcher" data-remove-pitcher="1">'
+      + escHtml(name) + ' (P) ×</button>');
+  }
+  chips.innerHTML = html.join('');
+}
+document.getElementById('pickChips').addEventListener('click', e => {
+  const chip = e.target.closest('[data-remove-batter], [data-remove-pitcher]');
+  if (!chip) return;
+  if (chip.dataset.removeBatter) {
+    const idx = batters.indexOf(chip.dataset.removeBatter);
+    if (idx >= 0) batters.splice(idx, 1);
+  } else {
+    pitcher = null;
+  }
+  render();
+});
+applyFilters();
 </script>
 {% endblock %}
