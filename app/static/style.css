@@ -23,6 +23,11 @@ a { color: var(--accent); }
 /* Header — same as the football site: Ravix logo + wordmark, pill nav. */
 header { padding: 18px 0; border-bottom: 1px solid var(--border); }
 header .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-top: 0; padding-bottom: 0; }
+/* The header needs more room than the 720px content column: brand +
+   full nav + gear is ~740px, so at 720px the nav dropped to a second
+   row and doubled the header height (Nov 24, 2026). Football's wrap is
+   1080px; 960px keeps the header close to the content width. */
+header .wrap { max-width: 960px; }
 .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); }
 .brand img { width: 42px; height: 42px; border-radius: 10px; object-fit: contain;
   box-shadow: 0 0 0 1px var(--border), 0 6px 20px rgba(0,0,0,.5); }

@@ -1,6 +1,8 @@
 """Shared header (Nov 24, 2026): same Ravix header as the football site —
 logo + wordmark, pill nav, brand fonts, favicon."""
 
+import os
+
 
 def test_header_matches_football_site(client):
     page = client.get("/register")
@@ -30,3 +32,12 @@ def test_stylesheet_link_is_versioned(client):
     page = client.get("/register")
     assert page.status_code == 200
     assert "/static/style.css?v=" in page.text
+
+
+def test_header_wrap_is_wide_enough_for_nav():
+    # Nov 24, 2026: the header shared the 720px content wrap, so brand +
+    # full nav + gear (~740px) overflowed and the nav dropped to a second
+    # row, doubling the header height. The header gets its own wider wrap.
+    css = open(os.path.join(os.path.dirname(__file__), "..", "app",
+                            "static", "style.css")).read()
+    assert "header .wrap { max-width: 960px; }" in css
