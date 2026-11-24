@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Request received — Prime5 Baseball{% endblock %}
+{% block content %}
+<div style="text-align:center;padding:8px 0 4px;">
+  <div class="pill">PENDING APPROVAL</div>
+  <h1>{{ heading }}</h1>
+  <p class="sub" style="font-size:14px;line-height:1.6;">{{ message }}</p>
+  {% if note %}<p class="sub" style="font-size:12px;">{{ note }}</p>{% endif %}
+</div>
+{% endblock %}

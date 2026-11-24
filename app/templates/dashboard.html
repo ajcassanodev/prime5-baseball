@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}My picks — Prime5 Baseball{% endblock %}
+{% block content %}
+<h1>My picks — {{ week_label }}</h1>
+<p class="sub">{{ member.name }}{% if member.is_test %} <span class="tag">test member</span>{% endif %}</p>
+{% if rows %}
+  {% for r in rows %}
+  <div class="row" style="cursor:default;">
+    <span class="num">{{ r.slot }}</span>
+    <span class="main"><b>{{ r.name }}</b> <span class="sub2">{{ r.team }} · {{ r.kind }}</span><br>
+    <span class="sub2">{{ r.game_label }} · {{ r.time_et }} ET</span></span>
+    <span class="right">{{ r.detail }} · {{ '%g'|format(r.points) }} pts</span>
+  </div>
+  {% endfor %}
+  <div class="total">Week total: {{ '%.2f'|format(total) }} pts</div>
+  {% if not complete %}<p><a href="/picks">Finish your picks →</a></p>{% endif %}
+{% else %}
+  <p>You have no picks yet this week.</p>
+  <p><a href="/picks">Make your picks →</a></p>
+{% endif %}
+{% endblock %}

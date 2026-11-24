@@ -1,0 +1,20 @@
+[Unit]
+Description=Prime5 Baseball STAGING site (staging-baseball.ravixfs.com)
+After=network.target
+
+[Service]
+User=ravixfs
+Group=ravixfs
+WorkingDirectory=/opt/ravixfs-baseball-staging
+EnvironmentFile=/etc/ravixfs.env
+# /etc/ravixfs.env supplies ADMIN_TOKEN and RAVIX_SMTP_* (shared with
+# the football app). Do NOT set PRIME5BB_DB there — the explicit line
+# below wins only if the env file does not define it.
+Environment=PRIME5BB_DB=/opt/ravixfs-baseball-staging/baseball.db
+Environment=PRIME5BB_BASE_URL=https://staging-baseball.ravixfs.com
+ExecStart=/opt/ravixfs-baseball-staging/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8002
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

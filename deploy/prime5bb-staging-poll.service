@@ -1,0 +1,11 @@
+[Unit]
+Description=Prime5 Baseball staging data poller
+
+[Service]
+Type=oneshot
+User=ravixfs
+Group=ravixfs
+EnvironmentFile=/etc/ravixfs.env
+Environment=PRIME5BB_DB=/opt/ravixfs-baseball-staging/baseball.db
+# No --date: poll.py defaults to today, which is what the Friday timer wants.
+ExecStart=/opt/ravixfs-baseball-staging/venv/bin/python /opt/ravixfs-baseball-staging/poller/poll.py

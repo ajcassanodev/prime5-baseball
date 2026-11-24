@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Prime5 Baseball{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <span class="brand">PRIME5 BASEBALL</span>
+    <nav>
+      <a href="/picks">Pick</a>
+      <a href="/dashboard">My picks</a>
+      <a href="/standings">Standings</a>
+    </nav>
+  </header>
+  <div class="wrap">
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

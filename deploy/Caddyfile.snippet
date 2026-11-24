@@ -1,0 +1,8 @@
+# DRAFT — verify against the LIVE Caddyfile before applying.
+# The repo copy of football's Caddyfile is stale vs live; start Caddy
+# changes from the live version. Port 8002 = baseball staging
+# (8000 football prod, 8001 football staging).
+
+staging-baseball.ravixfs.com {
+	reverse_proxy localhost:8002
+}

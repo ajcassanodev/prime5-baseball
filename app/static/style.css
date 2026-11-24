@@ -1,0 +1,160 @@
+/* Prime5 Baseball — Ravix dark. Core scaffold styles. */
+:root {
+  --bg: #0e1116;
+  --surface: #171b22;
+  --surface-muted: #1e232d;
+  --text: #e8eaf0;
+  --muted: #9aa0ae;
+  --border: #2a2f3a;
+  --accent: #d4a017;
+  --accent-text: #161300;
+  --green: #22a06b;
+  --gray: #9aa0a6;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px; line-height: 1.45;
+}
+a { color: var(--accent); }
+.wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+header.top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  max-width: 720px; margin: 0 auto;
+}
+header.top .brand { font-weight: 800; letter-spacing: 0.02em; }
+header.top nav a { margin-left: 14px; color: var(--muted); text-decoration: none; }
+header.top nav a:hover { color: var(--text); }
+h1 { font-size: 20px; margin: 4px 0 2px; }
+h2 { font-size: 15px; margin: 18px 0 6px; }
+.sub { color: var(--muted); font-size: 13px; }
+.game-head {
+  font-weight: 700; font-size: 13px; color: var(--muted);
+  margin: 12px 0 4px; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.game-head:first-of-type { border-top: none; padding-top: 0; }
+.row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  text-align: left; padding: 9px 10px; margin: 3px 0;
+  border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text);
+  font-size: 14px; cursor: pointer;
+}
+button.row:hover { border-color: var(--accent); }
+.row.selected { border-color: var(--accent); }
+.row.dim { opacity: 0.45; }
+.row .num { width: 18px; text-align: center; font-weight: 700; color: var(--accent); flex: none; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.dot.in { background: var(--green); }
+.dot.out { background: var(--gray); }
+.row .main { flex: 1; min-width: 0; }
+.row .main .sub2 { color: var(--muted); font-size: 12px; }
+.row .right { color: var(--muted); flex: none; text-align: right; }
+.card {
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px; background: var(--surface-muted); margin-top: 14px;
+}
+.total { font-weight: 700; font-size: 17px; margin-top: 6px; }
+.btn {
+  flex: 1; padding: 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent);
+  color: var(--accent-text); font-weight: 700; font-size: 15px;
+}
+.btn.secondary {
+  flex: none; background: var(--surface); color: var(--text);
+  border-color: var(--border); padding: 10px 14px;
+}
+.btn:disabled { opacity: 0.5; cursor: default; }
+.error {
+  border: 1px solid #b3402e; background: #2a1512; color: #f0b4aa;
+  border-radius: 8px; padding: 10px; margin: 10px 0;
+}
+table.standings { width: 100%; border-collapse: collapse; }
+table.standings td, table.standings th {
+  padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: left;
+}
+table.standings td.num, table.standings th.num { text-align: right; }
+.tag {
+  font-size: 11px; color: var(--muted); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px; margin-left: 6px;
+}
+.legend { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.linklike {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--accent); font-size: 13px;
+}
+.linklike:hover { text-decoration: underline; }
+
+/* Registration + admin. */
+.eyebrow {
+  font-size: 11px; letter-spacing: 2px; color: var(--accent);
+  font-weight: 700;
+}
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+.field {
+  display: block; margin-top: 12px; font-size: 12px; font-weight: 600;
+}
+.field input[type="text"], .field input[type="email"],
+.field input[type="tel"] {
+  display: block; width: 100%; margin-top: 5px; padding: 10px 11px;
+  border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface-muted); color: var(--text); font-size: 14px;
+}
+.field .hint, .field-label + .hint { font-weight: 400; color: var(--muted); }
+.field-label { margin-top: 14px; font-size: 12px; font-weight: 600; }
+.radio-row { display: flex; gap: 8px; margin-top: 6px; }
+.radio-row label {
+  flex: 1; padding: 10px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-muted);
+  font-size: 13px; font-weight: 600; text-align: center;
+}
+.radio-row label:has(input:checked) {
+  border-color: var(--accent); color: var(--accent);
+}
+.pill {
+  display: inline-block; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--accent); color: var(--accent);
+  font-size: 12px; font-weight: 700; letter-spacing: 1px;
+}
+table.admin td.actions { white-space: nowrap; text-align: right; }
+.btn.small {
+  flex: none; padding: 6px 12px; font-size: 13px; width: auto;
+}
+.btn.secondary.small { padding: 6px 12px; font-size: 13px; }
+
+/* Welcome pop-up tutorial (first visit). */
+.welcome-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.welcome-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px 18px;
+  max-width: 460px; width: 100%; position: relative;
+}
+.welcome-card .eyebrow {
+  font-size: 11px; letter-spacing: 2px; color: var(--accent);
+  font-weight: 700;
+}
+.welcome-card h2 { font-size: 20px; margin: 8px 0 6px; }
+.welcome-card .body { font-size: 14px; line-height: 1.6; color: var(--muted); margin: 0; }
+.welcome-close {
+  position: absolute; top: 8px; right: 12px;
+  border: none; background: none; color: var(--muted);
+  font-size: 22px; line-height: 1; cursor: pointer;
+}
+.welcome-close:hover { color: var(--text); }
+.welcome-dots { display: flex; gap: 6px; margin: 16px 0 12px; }
+.welcome-dots span {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--border);
+}
+.welcome-dots span.on { background: var(--accent); }
+.welcome-actions { display: flex; gap: 8px; }
+.welcome-actions .btn.secondary { visibility: hidden; }
+.welcome-actions .btn.secondary.show { visibility: visible; }

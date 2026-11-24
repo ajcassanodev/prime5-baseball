@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Register — Prime5 Baseball{% endblock %}
+{% block content %}
+<div class="eyebrow">PRIME5 BASEBALL · 2027 SEASON</div>
+<h1>Join the league</h1>
+<p class="sub">You're invited to the playground first — try the picks on real
+2026 Friday data. No entry due yet.</p>
+
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<form method="post" action="/register">
+  <input type="hidden" name="invite_token" value="{{ form.invite_token }}">
+  <div class="field-row">
+    <label class="field">First name
+      <input type="text" name="first_name" value="{{ form.first_name }}" required>
+    </label>
+    <label class="field">Last name
+      <input type="text" name="last_name" value="{{ form.last_name }}" required>
+    </label>
+  </div>
+  <label class="field">Email
+    <input type="email" name="email" value="{{ form.email }}" required>
+    <span class="hint">Prefilled from your invite. Your pick link goes here once you're approved.</span>
+  </label>
+  <label class="field">Phone <span class="hint">(optional)</span>
+    <input type="tel" name="phone" value="{{ form.phone }}" placeholder="(585) 555-0100">
+  </label>
+  <div class="field-label">Did you play in 2026?</div>
+  <div class="radio-row">
+    <label><input type="radio" name="returning" value="yes" {% if form.returning == "yes" %}checked{% endif %}> I played in 2026</label>
+    <label><input type="radio" name="returning" value="no" {% if form.returning == "no" %}checked{% endif %}> I'm new</label>
+  </div>
+  <label class="field">Who referred you? <span class="hint">(optional)</span>
+    <input type="text" name="referrer" value="{{ form.referrer }}" placeholder="Name of the member who invited you">
+  </label>
+  <button type="submit" class="btn" style="margin-top:18px;">Request to join</button>
+  <p class="sub" style="text-align:center;">Your $45 entry is due when the 2027 season starts — we'll collect it then.</p>
+</form>
+{% endblock %}

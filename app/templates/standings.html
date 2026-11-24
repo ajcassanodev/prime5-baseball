@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Standings — Prime5 Baseball{% endblock %}
+{% block content %}
+<h1>Standings — {{ week_label }}</h1>
+<table class="standings">
+  <tr><th>#</th><th>Member</th><th class="num">Picks</th><th class="num">Points</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td>{{ r.name }}{% if r.is_test %}<span class="tag">test</span>{% endif %}</td>
+    <td class="num">{{ r.picks_made }}/6</td>
+    <td class="num">{{ '%.2f'|format(r.points) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}
