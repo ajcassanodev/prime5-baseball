@@ -2,7 +2,7 @@
 {% block title %}My picks — Prime5 Baseball{% endblock %}
 {% block content %}
 <h1>My picks — {{ week_label }}</h1>
-<p class="sub">{{ member.name }}{% if member.is_test %} <span class="tag">test member</span>{% endif %}</p>
+<p class="sub"><b>{{ member.display_name }}</b>{% if member.display_sub %}<span class="display-sub">{{ member.display_sub }}</span>{% endif %}{% if member.is_test %} <span class="tag">test member</span>{% endif %}</p>
 {% if rows %}
   {% for r in rows %}
   <div class="row" style="cursor:default;">

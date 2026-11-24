@@ -19,6 +19,11 @@ CREATE TABLE IF NOT EXISTS members (
     played_2026 INTEGER,  -- 1 played in 2026, 0 new, NULL unknown
     referrer TEXT,
     invite_token TEXT,
+    -- Screen name (Nov 24, 2026): what other members see; NULL for
+    -- legacy members, who fall back to the short name.
+    screen_name TEXT,
+    show_full_name INTEGER NOT NULL DEFAULT 0,  -- 1 = show the full
+    -- name under the screen name instead of first name + last initial
     created_at TEXT NOT NULL
 );
 

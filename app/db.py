@@ -36,6 +36,10 @@ def init_db() -> None:
         ("played_2026", "INTEGER"),
         ("referrer", "TEXT"),
         ("invite_token", "TEXT"),
+        # Screen names (Nov 24, 2026): what other members see. NULL for
+        # legacy members, who fall back to the short name.
+        ("screen_name", "TEXT"),
+        ("show_full_name", "INTEGER NOT NULL DEFAULT 0"),
     ):
         if col not in cols:
             con.execute(f"ALTER TABLE members ADD COLUMN {col} {ddl}")
@@ -52,12 +56,90 @@ def utcnow_iso() -> str:
 MEMBER_STATUSES = ("pending", "active", "declined")
 
 
+# ---------------------------------------------------------------- screen names
+
+def short_name(full_name: str) -> str:
+    """First name + last-name initial, e.g. "Adam Cassano" -> "Adam C.".
+
+    Single-word names come back as-is."""
+    parts = (full_name or "").strip().split()
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    return f"{parts[0]} {parts[-1][0].upper()}."
+
+
+def validate_screen_name(name: str) -> str | None:
+    """Error string when a screen name is unusable, else None."""
+    name = (name or "").strip()
+    if not name:
+        return "Screen name is required."
+    if len(name) < 3 or len(name) > 20:
+        return "Screen name must be 3–20 characters."
+    if not all(c.isalnum() or c == "_" for c in name):
+        return ("Screen name can only use letters, numbers"
+                " and underscores.")
+    return None
+
+
+def screen_name_available(con, name: str, exclude_member_id: int | None = None) -> bool:
+    """Case-insensitive uniqueness across ALL members regardless of
+    status — a pending member holds their name too. False for empty
+    or invalid names."""
+    if validate_screen_name(name) is not None:
+        return False
+    sql = ("SELECT 1 FROM members WHERE screen_name IS NOT NULL"
+           " AND LOWER(screen_name) = LOWER(?)")
+    params: list = [name.strip()]
+    if exclude_member_id is not None:
+        sql += " AND id != ?"
+        params.append(exclude_member_id)
+    return con.execute(sql, params).fetchone() is None
+
+
+def _row_val(row, key):
+    """Dict- or Row-safe lookup; None when the key is absent."""
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
+def display_name(member_row) -> str:
+    """What other members see: the screen name, or the short name for
+    legacy members without one."""
+    screen = _row_val(member_row, "screen_name")
+    if screen:
+        return screen
+    return short_name(_row_val(member_row, "name") or "")
+
+
+def display_sub(member_row) -> str:
+    """Small line under the display name: the full name when the member
+    opted in, else the short name. Empty for legacy members (no screen
+    name) — they show just the short name, no sub line."""
+    if not _row_val(member_row, "screen_name"):
+        return ""
+    if _row_val(member_row, "show_full_name"):
+        return (_row_val(member_row, "name") or "").strip()
+    return short_name(_row_val(member_row, "name") or "")
+
+
+def set_show_full_name(con, member_id: int, value: bool) -> None:
+    con.execute("UPDATE members SET show_full_name = ? WHERE id = ?",
+                (1 if value else 0, member_id))
+    con.commit()
+
+
 def create_member(con, name: str, email: str | None = None,
                   is_test: bool = False, status: str = "active",
                   phone: str | None = None, played_2026: int | None = None,
                   referrer: str | None = None,
-                  invite_token: str | None = None) -> dict:
-    """Create a member and return {id, name, pick_token, is_test, status}.
+                  invite_token: str | None = None,
+                  screen_name: str | None = None) -> dict:
+    """Create a member and return {id, name, pick_token, is_test, status,
+    screen_name}.
 
     Pending members get a pick token at registration, but it is unusable
     until approval flips them active (member_by_token refuses them).
@@ -67,15 +149,17 @@ def create_member(con, name: str, email: str | None = None,
     token = secrets.token_urlsafe(24)
     cur = con.execute(
         "INSERT INTO members (name, email, pick_token, is_test, is_active,"
-        " status, phone, played_2026, referrer, invite_token, created_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " status, phone, played_2026, referrer, invite_token, screen_name,"
+        " created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (name, email, token, 1 if is_test else 0,
          1 if status == "active" else 0, status, phone, played_2026,
-         referrer, invite_token, utcnow_iso()),
+         referrer, invite_token, screen_name, utcnow_iso()),
     )
     con.commit()
     return {"id": cur.lastrowid, "name": name, "pick_token": token,
-            "is_test": bool(is_test), "status": status}
+            "is_test": bool(is_test), "status": status,
+            "screen_name": screen_name}
 
 
 def member_by_token(con, token: str):
@@ -331,10 +415,12 @@ def delete_pick(con, member_id: int, season: int, week: int, slot: str) -> None:
 
 
 def standings(con, season: int, week: int) -> list:
-    """[{member, points}] for one week, test members flagged, best first."""
+    """[{member, points, display_name, display_sub}] for one week,
+    test members flagged, best first. Sorted by points, then the
+    stored name — only the rendered text uses the screen name."""
     members = con.execute(
-        "SELECT id, name, is_test FROM members WHERE is_active = 1"
-        " ORDER BY name").fetchall()
+        "SELECT id, name, screen_name, show_full_name, is_test FROM members"
+        " WHERE is_active = 1 ORDER BY name").fetchall()
     stats = stats_for_week(con, season, week)
     out = []
     for m in members:
@@ -346,6 +432,8 @@ def standings(con, season: int, week: int) -> list:
             stats,
         )
         out.append({"member_id": m["id"], "name": m["name"],
+                    "display_name": display_name(m),
+                    "display_sub": display_sub(m),
                     "is_test": bool(m["is_test"]), "points": total,
                     "picks_made": len(picks)})
     out.sort(key=lambda r: (-r["points"], r["name"]))

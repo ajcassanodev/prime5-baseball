@@ -18,6 +18,10 @@
       <input type="text" name="last_name" value="{{ form.last_name }}" required>
     </label>
   </div>
+  <label class="field">Screen name
+    <input type="text" name="screen_name" value="{{ form.screen_name }}" required minlength="3" maxlength="20">
+    <span class="hint">What other members see. 3–20 characters, letters, numbers and underscores. Your full name is only visible to the commissioner.</span>
+  </label>
   <label class="field">Email
     <input type="email" name="email" value="{{ form.email }}" required>
     <span class="hint">Prefilled from your invite. Your pick link goes here once you're approved.</span>

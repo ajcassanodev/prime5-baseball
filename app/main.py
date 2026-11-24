@@ -17,7 +17,7 @@ import os
 import secrets
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -50,9 +50,17 @@ def _current_member(request: Request):
         return None
     con = dbmod.connect()
     try:
-        return dbmod.member_by_token(con, token)
+        member = dbmod.member_by_token(con, token)
     finally:
         con.close()
+    if member is None:
+        return None
+    # Display values for the header/dashboard templates: screen name
+    # with the short name (or full name, when opted in) underneath.
+    member["short_name"] = dbmod.short_name(member["name"])
+    member["display_name"] = dbmod.display_name(member)
+    member["display_sub"] = dbmod.display_sub(member)
+    return member
 
 
 def _need_member(request: Request):
@@ -116,12 +124,13 @@ def locked(request: Request):
 
 # ---------------------------------------------------------------- registration
 
-def _register_form(first_name="", last_name="", email="", phone="",
-                   returning="", referrer="", invite_token=""):
+def _register_form(first_name="", last_name="", screen_name="", email="",
+                   phone="", returning="", referrer="", invite_token=""):
     """Form values round-tripped back to the register template."""
     return {"first_name": first_name, "last_name": last_name,
-            "email": email, "phone": phone, "returning": returning,
-            "referrer": referrer, "invite_token": invite_token}
+            "screen_name": screen_name, "email": email, "phone": phone,
+            "returning": returning, "referrer": referrer,
+            "invite_token": invite_token}
 
 
 @app.get("/register", response_class=HTMLResponse)
@@ -137,17 +146,19 @@ def register_page(request: Request, invite: str = "", email: str = ""):
 @app.post("/register", response_class=HTMLResponse)
 def register_submit(request: Request,
                     first_name: str = Form(""), last_name: str = Form(""),
-                    email: str = Form(""), phone: str = Form(""),
+                    screen_name: str = Form(""), email: str = Form(""),
+                    phone: str = Form(""),
                     returning: str = Form(""), referrer: str = Form(""),
                     invite_token: str = Form("")):
     first_name = first_name.strip()
     last_name = last_name.strip()
+    screen_name = screen_name.strip()
     email = emailer.valid_email(email)
     phone = phone.strip()
     referrer = referrer.strip()
     invite_token = invite_token.strip()
     played_2026_val = {"yes": 1, "no": 0}.get(returning.strip().lower())
-    form = _register_form(first_name, last_name, email or "",
+    form = _register_form(first_name, last_name, screen_name, email or "",
                           phone, returning, referrer, invite_token)
     if not first_name or not last_name:
         return _render(request, "register.html",
@@ -158,6 +169,10 @@ def register_submit(request: Request,
                        {"error": "A valid email address is required —"
                         " your pick link goes there once you're approved.",
                         "form": form})
+    screen_error = dbmod.validate_screen_name(screen_name)
+    if screen_error is not None:
+        return _render(request, "register.html",
+                       {"error": screen_error, "form": form})
     con = dbmod.connect()
     try:
         existing = dbmod.member_by_email(con, email)
@@ -181,21 +196,36 @@ def register_submit(request: Request,
                                 " is still waiting — no need to send"
                                 " another one."})
             # Declined before: reopen the same record as pending with the
-            # new details instead of creating a duplicate.
+            # new details instead of creating a duplicate. The screen
+            # name must be free for someone else to hold (their own
+            # previous one still counts as theirs).
+            if not dbmod.screen_name_available(con, screen_name,
+                                               exclude_member_id=existing["id"]):
+                return _render(request, "register.html",
+                               {"error": "That screen name is already taken"
+                                " — try another one.",
+                                "form": form})
             dbmod.set_member_status(con, existing["id"], "pending")
             con.execute(
                 "UPDATE members SET name = ?, phone = ?, played_2026 = ?,"
-                " referrer = ?, invite_token = ? WHERE id = ?",
+                " referrer = ?, invite_token = ?, screen_name = ?"
+                " WHERE id = ?",
                 (f"{first_name} {last_name}", phone or None, played_2026_val,
-                 referrer or None, invite_token or None, existing["id"]),
+                 referrer or None, invite_token or None, screen_name,
+                 existing["id"]),
             )
             con.commit()
         else:
+            if not dbmod.screen_name_available(con, screen_name):
+                return _render(request, "register.html",
+                               {"error": "That screen name is already taken"
+                                " — try another one.",
+                                "form": form})
             dbmod.create_member(
                 con, f"{first_name} {last_name}", email=email,
                 status="pending", phone=phone or None,
                 played_2026=played_2026_val, referrer=referrer or None,
-                invite_token=invite_token or None,
+                invite_token=invite_token or None, screen_name=screen_name,
             )
     finally:
         con.close()
@@ -394,6 +424,30 @@ def welcome_seen(request: Request):
     finally:
         con.close()
     return {"ok": True}
+
+
+@app.post("/settings")
+async def update_settings(request: Request):
+    """Flip the signed-in member's "Show my full name" setting.
+    Body: {"show_full_name": true/false}."""
+    member = _need_member(request)
+    if member is None:
+        return RedirectResponse("/locked", status_code=303)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"detail": "invalid JSON"}, status_code=400)
+    value = body.get("show_full_name") if isinstance(body, dict) else None
+    if not isinstance(value, bool):
+        return JSONResponse(
+            {"detail": "show_full_name must be true or false"},
+            status_code=400)
+    con = dbmod.connect()
+    try:
+        dbmod.set_show_full_name(con, member["id"], value)
+    finally:
+        con.close()
+    return {"ok": True, "show_full_name": value}
 
 
 @app.post("/picks", response_class=HTMLResponse)

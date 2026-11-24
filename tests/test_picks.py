@@ -389,5 +389,8 @@ def test_standings_marks_test_members(con, client):
     assert page.status_code == 200
     assert "Testy" in page.text
     assert "test" in page.text.lower()
-    # Beck (8.97) outscores Holmes (3.78): Testy first.
-    assert page.text.index("Testy") < page.text.index("Ada")
+    # Beck (8.97) outscores Holmes (3.78): Testy first. Scope to the
+    # table — the header's Settings description names the signed-in
+    # member ("Ada") before the table starts.
+    table = page.text.split("<table")[1].split("</table>")[0]
+    assert table.index("Testy") < table.index("Ada")

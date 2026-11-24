@@ -23,6 +23,65 @@
         <a href="/standings">Standings</a>
         <a href="mailto:help@ravixfs.com">Help</a>
       </nav>
+      {% if member %}
+      <div class="settings">
+        <button type="button" class="settings-btn" id="settingsBtn" aria-haspopup="true" aria-expanded="false">Settings</button>
+        <div class="settings-panel" id="settingsPanel" hidden>
+          <div class="settings-title">Settings</div>
+          <div class="settings-row">
+            <div>
+              <div class="settings-label">Show my full name</div>
+              <div class="settings-desc">Show "{{ member.name }}" under your screen name instead of "{{ member.short_name }}".</div>
+            </div>
+            <button type="button" class="switch{% if member.show_full_name %} on{% endif %}" id="fullNameSwitch" role="switch" aria-checked="{% if member.show_full_name %}true{% else %}false{% endif %}" aria-label="Show my full name"><span class="knob"></span></button>
+          </div>
+          <button type="button" class="btn secondary small" id="settingsDone" style="margin-top:10px;">Done</button>
+        </div>
+      </div>
+      <script>
+      (function () {
+        var btn = document.getElementById("settingsBtn");
+        var panel = document.getElementById("settingsPanel");
+        var sw = document.getElementById("fullNameSwitch");
+        var done = document.getElementById("settingsDone");
+        if (!btn || !panel || !sw) return;
+        function close() {
+          panel.hidden = true;
+          btn.setAttribute("aria-expanded", "false");
+        }
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var open = panel.hidden;
+          panel.hidden = !open;
+          btn.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+        document.addEventListener("click", function (e) {
+          if (!panel.hidden && !panel.contains(e.target)) close();
+        });
+        done.addEventListener("click", close);
+        sw.addEventListener("click", function () {
+          var next = !sw.classList.contains("on");
+          var prev = !next;
+          sw.classList.toggle("on", next);
+          sw.setAttribute("aria-checked", next ? "true" : "false");
+          fetch("/settings", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({show_full_name: next}),
+          }).then(function (r) {
+            if (!r.ok) throw new Error("bad status");
+            return r.json();
+          }).then(function (data) {
+            sw.classList.toggle("on", !!data.show_full_name);
+            sw.setAttribute("aria-checked", data.show_full_name ? "true" : "false");
+          }).catch(function () {
+            sw.classList.toggle("on", prev);
+            sw.setAttribute("aria-checked", prev ? "true" : "false");
+          });
+        });
+      })();
+      </script>
+      {% endif %}
     </div>
   </header>
   <div class="wrap">

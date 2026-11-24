@@ -31,6 +31,10 @@ def _register(client, **overrides):
             "email": "joe@example.com", "phone": "",
             "returning": "yes", "referrer": "", "invite_token": ""}
     data.update(overrides)
+    # Screen name is required at registration; default it from the
+    # first name so tests that don't care about it stay unique.
+    data.setdefault("screen_name",
+                    (data["first_name"] or "player").lower())
     return client.post("/register", data=data)
 
 
@@ -76,6 +80,7 @@ def test_registration_creates_pending_member(con, client):
     m = dbmod.member_by_email(con, "joe@example.com")
     assert m is not None
     assert m["name"] == "Joe Pagliaro"
+    assert m["screen_name"] == "joe"
     assert m["status"] == "pending"
     assert m["is_active"] == 0
     assert m["phone"] == "(585) 555-0100"

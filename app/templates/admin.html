@@ -10,7 +10,7 @@
   <tr><th>Name</th><th>Email</th><th>Phone</th><th>2026?</th><th>Referred by</th><th></th></tr>
   {% for m in pending %}
   <tr>
-    <td>{{ m.name }}{% if m.is_test %}<span class="tag">test</span>{% endif %}</td>
+    <td>{{ m.name }}{% if m.screen_name %} <span class="sub">({{ m.screen_name }})</span>{% endif %}{% if m.is_test %}<span class="tag">test</span>{% endif %}</td>
     <td>{{ m.email }}</td>
     <td>{{ m.phone or "—" }}</td>
     <td>{% if m.played_2026 == 1 %}Yes{% elif m.played_2026 == 0 %}New{% else %}—{% endif %}</td>
@@ -35,7 +35,7 @@
 <table class="standings admin">
   <tr><th>Name</th><th>Email</th><th></th></tr>
   {% for m in approved %}
-  <tr><td>{{ m.name }}{% if m.is_test %}<span class="tag">test</span>{% endif %}</td><td>{{ m.email }}</td><td class="sub">{{ m.created_at[:10] }}</td></tr>
+  <tr><td>{{ m.name }}{% if m.screen_name %} <span class="sub">({{ m.screen_name }})</span>{% endif %}{% if m.is_test %}<span class="tag">test</span>{% endif %}</td><td>{{ m.email }}</td><td class="sub">{{ m.created_at[:10] }}</td></tr>
   {% endfor %}
 </table>
 {% else %}
@@ -47,7 +47,7 @@
 <table class="standings admin">
   <tr><th>Name</th><th>Email</th><th></th></tr>
   {% for m in declined %}
-  <tr><td>{{ m.name }}</td><td>{{ m.email }}</td><td class="sub">{{ m.created_at[:10] }}</td></tr>
+  <tr><td>{{ m.name }}{% if m.screen_name %} <span class="sub">({{ m.screen_name }})</span>{% endif %}</td><td>{{ m.email }}</td><td class="sub">{{ m.created_at[:10] }}</td></tr>
   {% endfor %}
 </table>
 {% else %}
