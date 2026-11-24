@@ -116,3 +116,18 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- Head-to-head grants (Nov 24, 2026): winning a weekly matchup earns
+-- +1 batter pick for the following week (use_week), use-it-or-lose-it.
+-- One grant per (season, week_earned, member); used = 1 once the 6th
+-- batter is saved. Ties and byes earn nothing.
+CREATE TABLE IF NOT EXISTS head_to_head_grants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    season INTEGER NOT NULL,
+    week_earned INTEGER NOT NULL,
+    member_id INTEGER NOT NULL,
+    use_week INTEGER NOT NULL,
+    used INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (season, week_earned, member_id),
+    FOREIGN KEY (member_id) REFERENCES members (id)
+);

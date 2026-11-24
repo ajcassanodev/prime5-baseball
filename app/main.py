@@ -26,6 +26,7 @@ from fastapi.templating import Jinja2Templates
 from . import db as dbmod
 from . import emailer
 from . import lineup as lineup_mod
+from . import matchups as matchups_mod
 from . import mlb as mlb_mod
 from . import picks as picks_mod
 from .scoring import batter_points, pitcher_points, week_points
@@ -386,12 +387,21 @@ def _pick_page_data(con, member, season, week):
             "batters": batters,
             "pitchers": pitchers,
         })
+    # Head-to-head grants (Nov 24, 2026): a win last week earns a 6th
+    # batter this week. Awarded lazily so the grant exists by the time
+    # the member opens the pick page. The 6th slot stays open while
+    # the member edits a saved bonus pick, even after the grant is spent.
+    matchups_mod.award_grants_through(con, season, week)
+    grant = dbmod.available_grant(con, member["id"], season, week)
     return {
         "member": member, "season": season, "week": week,
         "groups": groups,
         "my_batter_count": sum(1 for p in mine.values() if p["kind"] == "batter"),
         "my_pitcher": next((p for p in mine.values() if p["kind"] == "pitcher"), None),
-        "complete": len(mine) == 6,
+        "complete": dbmod.has_base_lineup(mine.values()),
+        "has_grant": grant is not None,
+        "allow_sixth": grant is not None or "b6" in mine,
+        "grant_week": grant["week_earned"] if grant else None,
     }
 
 
@@ -458,10 +468,10 @@ async def update_settings(request: Request):
 def submit_picks(request: Request,
                  batter_1: int = Form(0), batter_2: int = Form(0),
                  batter_3: int = Form(0), batter_4: int = Form(0),
-                 batter_5: int = Form(0),
+                 batter_5: int = Form(0), batter_6: int = Form(0),
                  batter_1_game: int = Form(0), batter_2_game: int = Form(0),
                  batter_3_game: int = Form(0), batter_4_game: int = Form(0),
-                 batter_5_game: int = Form(0),
+                 batter_5_game: int = Form(0), batter_6_game: int = Form(0),
                  pitcher: int = Form(0)):
     member = _need_member(request)
     if member is None:
@@ -474,10 +484,25 @@ def submit_picks(request: Request,
         batter_picks = [(b, g) for b, g in
                         ((batter_1, batter_1_game), (batter_2, batter_2_game),
                          (batter_3, batter_3_game), (batter_4, batter_4_game),
-                         (batter_5, batter_5_game)) if b]
+                         (batter_5, batter_5_game),
+                         (batter_6, batter_6_game)) if b]
+        # A grant earned last week is what allows the 6th batter; award
+        # lazily first so it exists. An already-saved b6 keeps working
+        # while the member edits (the grant was spent when it was saved).
+        matchups_mod.award_grants_through(con, season, week["week"])
+        grant = dbmod.available_grant(con, member["id"], season,
+                                      week["week"])
+        existing = dbmod.picks_for_member_week(con, member["id"], season,
+                                               week["week"])
+        extra = grant is not None or any(p["slot"] == "b6"
+                                         for p in existing)
         try:
-            picks_mod.submit_picks(con, member["id"], season, week["week"],
-                                   batter_picks, pitcher or None)
+            result = picks_mod.submit_picks(con, member["id"], season,
+                                            week["week"], batter_picks,
+                                            pitcher or None,
+                                            extra_batter=extra)
+            if grant is not None and "b6" in result["saved"]:
+                dbmod.use_grant(con, grant["id"])
             return RedirectResponse("/dashboard", status_code=303)
         except picks_mod.PickError as exc:
             data = _pick_page_data(con, member, season, week["week"])
@@ -595,12 +620,18 @@ def dashboard(request: Request):
             key=lambda d: -d["points"])
         week_date_label = date.fromisoformat(
             week["friday_date"]).strftime("%a %b %-d").upper()
+        # Head-to-head card (Nov 24, 2026): your current matchup +
+        # season record. Grants are awarded lazily here too.
+        matchups_mod.award_grants_through(con, season, week["week"])
+        h2h = matchups_mod.dashboard_matchup(con, member, season,
+                                             week["week"])
         return _render(request, "dashboard.html",
                        {"member": member, "season": season, "week": week,
                         "week_label": week.get("label") or f"Week {week['week']}",
                         "week_date_label": week_date_label,
                         "playground": bool(week.get("playground")),
-                        "rows": rows, "total": total, "complete": len(picks) == 6,
+                        "rows": rows, "total": total,
+                        "complete": dbmod.has_base_lineup(picks),
                         "rank": rank, "gap": gap,
                         "leader_name": leader["display_name"] if leader else None,
                         "rank_label": rank_label,
@@ -611,7 +642,71 @@ def dashboard(request: Request):
                         "top": dbmod.top_performers(con, season, week["week"]),
                         "streak": dbmod.hit_streak(con, member["id"], season,
                                                    week["week"]),
+                        "h2h": h2h,
                         "next_lock": _next_lock_label(week["friday_date"])})
+    finally:
+        con.close()
+
+
+@app.get("/matchups", response_class=HTMLResponse)
+def matchups_page(request: Request):
+    """Weekly head-to-head: this week's pairings with live scores, and
+    the season records table. Grants are awarded lazily here."""
+    member = _need_member(request)
+    if member is None:
+        return RedirectResponse("/locked", status_code=303)
+    con = dbmod.connect()
+    try:
+        season, week = _current_week_or_none(con)
+        if week is None:
+            return _render(request, "empty.html",
+                           {"member": member,
+                            "message": "No Friday scheduled yet."})
+        matchups_mod.award_grants_through(con, season, week["week"])
+        rows, bye = matchups_mod.matchup_rows(con, season, week["week"])
+        for r in rows:
+            r["mine"] = member["id"] in (r["a"]["id"], r["b"]["id"])
+        records = matchups_mod.head_to_head_records(con, season,
+                                                    week["week"])
+        return _render(request, "matchups.html",
+                       {"member": member, "season": season, "week": week,
+                        "week_label": week.get("label") or f"Week {week['week']}",
+                        "rows": rows, "bye": bye, "records": records,
+                        "active_count": len(matchups_mod.active_member_ids(con))})
+    finally:
+        con.close()
+
+
+@app.get("/schedule", response_class=HTMLResponse)
+def schedule_page(request: Request):
+    """The signed-in member's 25-week schedule: opponents, results for
+    final weeks, upcoming weeks. Grants are awarded lazily here."""
+    member = _need_member(request)
+    if member is None:
+        return RedirectResponse("/locked", status_code=303)
+    con = dbmod.connect()
+    try:
+        season, week = _current_week_or_none(con)
+        if week is None:
+            return _render(request, "empty.html",
+                           {"member": member,
+                            "message": "No Friday scheduled yet."})
+        matchups_mod.award_grants_through(con, season, week["week"])
+        sched = matchups_mod.schedule_for_member(con, member["id"], season,
+                                                 week["week"])
+        records = {r["member"]["id"]: r for r in
+                   matchups_mod.head_to_head_records(con, season,
+                                                     week["week"])}
+        mine = records.get(member["id"], {"wins": 0, "losses": 0,
+                                          "ties": 0, "picks_earned": 0})
+        return _render(request, "schedule.html",
+                       {"member": member, "season": season, "week": week,
+                        "sched": sched, "record": mine,
+                        "division_name": dbmod.division_display(
+                            member.get("division") or "red"),
+                        "playoff_label": matchups_mod.playoff_labels(
+                            con, season),
+                        "active_count": len(matchups_mod.active_member_ids(con))})
     finally:
         con.close()
 

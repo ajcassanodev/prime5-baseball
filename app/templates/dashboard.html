@@ -55,6 +55,21 @@
   <p class="sub">Hit streak: <b>{{ streak }}</b> — every hit adds one, any hitless batter resets it. Best streak wins $50.</p>
 </div>
 
+<div class="dash-card">
+  <div class="dash-cardt">HEAD-TO-HEAD — {{ week_label }} <a href="/matchups" class="dash-edit">View all matchups →</a></div>
+  {% if h2h %}
+    {% if h2h.bye %}
+      <p>You have a bye this week — no matchup, no pick.</p>
+    {% else %}
+      <p><b>You</b> vs <b>{{ h2h.opponent.display_name }}</b>{% if h2h.opponent.display_sub %}<span class="display-sub">{{ h2h.opponent.display_sub }}</span>{% endif %} — {{ '%.2f'|format(h2h.my_points) }} – {{ '%.2f'|format(h2h.opp_points) }}</p>
+      <p class="sub">{{ h2h.status }}</p>
+    {% endif %}
+    <p class="sub">Season: {{ h2h.wins }}-{{ h2h.losses }}{% if h2h.ties %} ({{ h2h.ties }} ties){% endif %} · {{ h2h.picks_earned }} pick{{ 's' if h2h.picks_earned != 1 else '' }} earned</p>
+  {% else %}
+    <p class="sub">Head-to-head starts once more members join — every member faces one opponent a week, and the winner earns +1 batter pick for the following week.</p>
+  {% endif %}
+</div>
+
 <div class="dash-grid">
   <div class="dash-card">
     <div class="dash-cardt">TOP PERFORMERS — {{ week_date_label }} (FULL DAY)</div>

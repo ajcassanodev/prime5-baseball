@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}My Schedule — Prime5 Baseball{% endblock %}
+{% block content %}
+<h1>My Schedule — {{ season }}</h1>
+{% if active_count < 2 %}
+<p class="sub">Head-to-head starts once more members join — every member faces one opponent a week, and the winner earns +1 batter pick for the following week.</p>
+{% else %}
+<p class="sub">Regular season · {{ record.wins }}-{{ record.losses }}{% if record.ties %} ({{ record.ties }} ties){% endif %} · {{ record.picks_earned }} pick{{ 's' if record.picks_earned != 1 else '' }} earned · {{ division_name }}</p>
+
+<div class="sched-filters">
+  <button type="button" class="pill on" data-filter="all">All 25 weeks</button>
+  <button type="button" class="pill" data-filter="played">Played</button>
+  <button type="button" class="pill" data-filter="upcoming">Upcoming</button>
+</div>
+
+<div class="dash-card">
+  {% for s in sched %}
+  <div class="sched-row" data-kind="{{ s.kind }}">
+    <span><span class="sub">Wk {{ s.week }} · {{ s.date_label }}</span> &nbsp;vs {% if s.opponent %}<b>{{ s.opponent.display_name }}</b>{% if s.opponent.display_sub %}<span class="display-sub">{{ s.opponent.display_sub }}</span>{% endif %}{% elif s.bye %}—{% else %}TBD{% endif %}</span>
+    <span class="right">
+      {% if s.status == 'bye' %}Bye — no matchup
+      {% elif s.status == 'final' %}<b>{% if s.won %}W{% elif s.tied %}T{% else %}L{% endif %}</b> {{ '%.2f'|format(s.my_points) }}–{{ '%.2f'|format(s.opp_points) }}{% if s.won %} <span class="h2h-badge">+1 pick</span>{% elif s.tied %} <span class="h2h-tie">no pick</span>{% endif %}
+      {% elif s.status == 'live' %}{{ '%.2f'|format(s.my_points) }}–{{ '%.2f'|format(s.opp_points) }} <span class="h2h-live">Live</span>
+      {% else %}<span class="sub">Upcoming</span>{% endif %}
+    </span>
+  </div>
+  {% endfor %}
+</div>
+
+<p class="sub">Playoffs: {{ playoff_label }} — 2-week playoff, matchups set by the standings once the regular season ends.</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var pills = document.querySelectorAll('.sched-filters .pill');
+  var rows = document.querySelectorAll('.sched-row');
+  pills.forEach(function (pill) {
+    pill.addEventListener('click', function () {
+      pills.forEach(function (p) { p.classList.remove('on'); });
+      pill.classList.add('on');
+      var f = pill.dataset.filter;
+      rows.forEach(function (row) {
+        row.style.display = (f === 'all' || row.dataset.kind === f) ? '' : 'none';
+      });
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -4,6 +4,7 @@
 <h1>Friday Pick — {{ week_label }}</h1>
 <p class="sub">Pick 5 batters + 1 Friday starting pitcher. 1 pt per hit · pitcher 0.01/pitch + 1/K.
 {% if playground %} Playground week — real past Friday data, picks always allowed.{% endif %}</p>
+{% if has_grant %}<div class="grant-note">Bonus pick — you won your Week {{ grant_week }} matchup. You can pick a 6th batter this week.</div>{% endif %}
 <p class="legend"><span class="dot in"></span> in Friday's lineup &nbsp; <span class="dot out"></span> not in lineup &nbsp;·&nbsp; <button type="button" class="linklike" id="howToBtn">How to play</button></p>
 
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
@@ -14,11 +15,13 @@
   <input type="hidden" name="batter_3" id="f_b3" value="0">
   <input type="hidden" name="batter_4" id="f_b4" value="0">
   <input type="hidden" name="batter_5" id="f_b5" value="0">
+  <input type="hidden" name="batter_6" id="f_b6" value="0">
   <input type="hidden" name="batter_1_game" id="f_b1_game" value="0">
   <input type="hidden" name="batter_2_game" id="f_b2_game" value="0">
   <input type="hidden" name="batter_3_game" id="f_b3_game" value="0">
   <input type="hidden" name="batter_4_game" id="f_b4_game" value="0">
   <input type="hidden" name="batter_5_game" id="f_b5_game" value="0">
+  <input type="hidden" name="batter_6_game" id="f_b6_game" value="0">
   <input type="hidden" name="pitcher" id="f_p" value="0">
 
   {# Sticky lineup bar: search + filters + live picks stay visible while
@@ -146,6 +149,8 @@ if (welcomeOverlay.dataset.showWelcome === '1') openWelcome();
 const batters = [];   // "mlb_id:game_pk" strings in pick order — on a
 // doubleheader day the same player has one row per game, and each row
 // is its own pick (picking both uses 2 of the 5 slots).
+// A head-to-head bonus pick raises the cap to 6 (server-rendered).
+const MAX_BATTERS = {{ 6 if allow_sixth else 5 }};
 let pitcher = null;
 const batterRows = [...document.querySelectorAll('.batter-row')];
 const pitcherRows = [...document.querySelectorAll('.pitcher-row')];
@@ -161,7 +166,7 @@ function render() {
     const pair = pairOf(r);
     const idx = batters.indexOf(pair);
     r.classList.toggle('selected', idx >= 0);
-    r.classList.toggle('dim', idx < 0 && batters.filter(Boolean).length >= 5);
+    r.classList.toggle('dim', idx < 0 && batters.filter(Boolean).length >= MAX_BATTERS);
     r.querySelector('.num').textContent = idx >= 0 ? String(idx + 1) : '';
   });
   pitcherRows.forEach(r => {
@@ -170,23 +175,25 @@ function render() {
     r.querySelector('.num').textContent = sel ? '✓' : '';
   });
   const picked = batters.filter(Boolean);
-  document.getElementById('bCount').textContent = `(${picked.length}/5)`;
-  for (let i = 0; i < 5; i++) {
+  document.getElementById('bCount').textContent = `(${picked.length}/${MAX_BATTERS})`;
+  for (let i = 0; i < MAX_BATTERS; i++) {
     const parts = (picked[i] || ':').split(':');
     document.getElementById('f_b' + (i + 1)).value = parts[0] || 0;
     document.getElementById('f_b' + (i + 1) + '_game').value = parts[1] || 0;
   }
   document.getElementById('f_p').value = pitcher || 0;
   document.getElementById('lineupSummary').textContent =
-    picked.length + '/5 batters · ' + (pitcher ? 'pitcher ✓' : 'no pitcher yet');
-  document.getElementById('lockBtn').disabled = !(picked.length === 5 && pitcher);
+    picked.length + '/' + MAX_BATTERS + ' batters · ' + (pitcher ? 'pitcher ✓' : 'no pitcher yet');
+  // 5 batters lock the week; the 6th is optional even with a bonus.
+  document.getElementById('lockBtn').disabled =
+    !(picked.length >= 5 && picked.length <= MAX_BATTERS && pitcher);
   renderChips();
 }
 batterRows.forEach(r => r.addEventListener('click', () => {
   const pair = pairOf(r);
   const idx = batters.indexOf(pair);
   if (idx >= 0) batters.splice(idx, 1);
-  else if (batters.filter(Boolean).length < 5) batters.push(pair);
+  else if (batters.filter(Boolean).length < MAX_BATTERS) batters.push(pair);
   render();
 }));
 pitcherRows.forEach(r => r.addEventListener('click', () => {

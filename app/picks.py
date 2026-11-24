@@ -1,6 +1,7 @@
 """Pick submission rules (core only).
 
-A valid week: exactly 5 batter slots + 1 starting pitcher.
+A valid week: exactly 5 batter slots + 1 starting pitcher — or 6
+batters when the member earned a head-to-head bonus pick (extra_batter).
 - Batter slots hold non-pitchers; the pitcher slot holds a pitcher who
   is a starting pitcher of a game that week.
 - Doubleheader rule (decided Nov 23, 2026): a batter appears as one
@@ -13,7 +14,9 @@ A valid week: exactly 5 batter slots + 1 starting pitcher.
 - A pick whose game has already started is rejected — except on a
   playground week (past data, sandbox), where picks are always allowed.
 - Editing: a member may resubmit any time; picks for games that have
-  already started are frozen and kept as-is.
+  already started are frozen and kept as-is. Resubmitting with only
+  5 batters drops a leftover 6th batter — unless its game has already
+  started, in which case the pick is frozen and stays.
 
 Batter picks are (mlb_id, game_pk) pairs: the same player in two
 different games is two different picks; the same player twice in the
@@ -48,16 +51,24 @@ def _starters_of_game(con, game: dict) -> set:
 
 
 def validate_pick_set(con, season: int, week: int,
-                      batter_picks: list, pitcher_id: int) -> dict:
+                      batter_picks: list, pitcher_id: int,
+                      extra_batter: bool = False) -> dict:
     """Validate a full pick set. batter_picks is a list of
     (mlb_id, game_pk) pairs. Returns {batters: [player dicts],
     pitcher: player dict, games: {game_pk: game dict}}.
 
+    extra_batter allows a 6th batter (a head-to-head bonus pick): the
+    set may then hold 5 or 6 batters. Without it, exactly 5.
+
     Raises PickError with a plain-language message on any problem.
     """
-    if len(batter_picks) != BATTER_COUNT:
+    if extra_batter:
+        if len(batter_picks) not in (BATTER_COUNT, BATTER_COUNT + 1):
+            raise PickError(f"Pick {BATTER_COUNT} batters"
+                            f" (or {BATTER_COUNT + 1} with a bonus pick).")
+    elif len(batter_picks) != BATTER_COUNT:
         raise PickError(f"Pick exactly {BATTER_COUNT} batters.")
-    if len(set(batter_picks)) != BATTER_COUNT:
+    if len(set(batter_picks)) != len(batter_picks):
         raise PickError("Each player can only be picked once per game.")
     batter_ids = [mlb_id for mlb_id, _ in batter_picks]
     if pitcher_id in batter_ids:
@@ -107,7 +118,8 @@ def validate_pick_set(con, season: int, week: int,
 
 def submit_picks(con, member_id: int, season: int, week: int,
                  batter_picks: list, pitcher_id: int,
-                 now: datetime | None = None) -> dict:
+                 now: datetime | None = None,
+                 extra_batter: bool = False) -> dict:
     """Validate and store a member's week. Returns the stored pick set.
 
     Picks for games already started are frozen: they are kept as-is and
@@ -118,7 +130,8 @@ def submit_picks(con, member_id: int, season: int, week: int,
     pick can still change.
     """
     now = now or datetime.now(timezone.utc)
-    checked = validate_pick_set(con, season, week, batter_picks, pitcher_id)
+    checked = validate_pick_set(con, season, week, batter_picks, pitcher_id,
+                                extra_batter=extra_batter)
     week_row = dbmod.current_week(con, season)
     playground = bool(week_row and week_row.get("playground"))
 
@@ -143,5 +156,16 @@ def submit_picks(con, member_id: int, season: int, week: int,
         dbmod.save_pick(con, member_id, season, week, slot, kind,
                         player["mlb_id"], player["game_pk"])
         saved.append(slot)
+    # A 5-batter submission drops a leftover 6th batter from an earlier
+    # bonus submission — unless that game's already started, in which
+    # case the pick is frozen and stays.
+    if len(checked["batters"]) == BATTER_COUNT:
+        old6 = existing.get("b6")
+        if old6 is not None:
+            game6 = checked["games"].get(old6["game_pk"])
+            started6 = (game6 is not None
+                        and _parse_utc(game6["game_date_utc"]) <= now)
+            if playground or not started6:
+                dbmod.delete_pick(con, member_id, season, week, "b6")
     return {"saved": saved, "frozen": frozen,
             "batters": checked["batters"], "pitcher": checked["pitcher"]}

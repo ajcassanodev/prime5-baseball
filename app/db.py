@@ -236,6 +236,26 @@ def mark_welcome_seen(con, member_id: int) -> None:
     con.commit()
 
 
+# ---------------------------------------------------------------- head-to-head grants
+
+def available_grant(con, member_id: int, season: int, use_week: int):
+    """The member's unused head-to-head grant for `use_week`, or None.
+    A grant is usable only in its use_week and only while unused —
+    an expired grant (past use_week) is never returned."""
+    row = con.execute(
+        "SELECT * FROM head_to_head_grants WHERE member_id = ?"
+        " AND season = ? AND use_week = ? AND used = 0",
+        (member_id, season, use_week),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def use_grant(con, grant_id: int) -> None:
+    con.execute("UPDATE head_to_head_grants SET used = 1 WHERE id = ?",
+                (grant_id,))
+    con.commit()
+
+
 # ---------------------------------------------------------------- weeks / games
 
 def current_week(con, season: int):
@@ -407,6 +427,18 @@ def game_starter_names(con, game_pk: int) -> dict:
 
 BATTER_SLOTS = ["b1", "b2", "b3", "b4", "b5"]
 PITCHER_SLOT = "p1"
+
+# The base lineup: 5 batter slots + the pitcher. Head-to-head matchups
+# are scored on the base lineup only; a bonus 6th batter (slot b6)
+# never counts toward the matchup.
+BASE_LINEUP_SLOTS = frozenset(BATTER_SLOTS + [PITCHER_SLOT])
+
+
+def has_base_lineup(picks) -> bool:
+    """True when the 5 base batter slots and the pitcher slot are all
+    filled — the lineup is complete whether or not a bonus b6 exists."""
+    slots = {p["slot"] for p in picks}
+    return BASE_LINEUP_SLOTS <= slots
 
 
 def picks_for_member_week(con, member_id: int, season: int, week: int) -> list:

@@ -10,9 +10,22 @@ _TMP = tempfile.mkdtemp(prefix="prime5bb-test-")
 os.environ["PRIME5BB_DB"] = os.path.join(_TMP, "test.db")
 
 from app import db as dbmod  # noqa: E402
+from app import mlb as mlb_mod  # noqa: E402
 
-_TABLES = ["picks", "player_game_stats", "lineups", "rosters",
-           "games", "players", "weeks", "members", "settings"]
+
+@pytest.fixture(autouse=True)
+def no_mlb_network(monkeypatch):
+    """No test touches the real MLB API — the dashboard's next-lock
+    lookup falls back to plain 'Next Friday'. (Tests that need a
+    schedule stub it themselves, as test_dashboard.py does.)"""
+    def _boom(date):
+        raise mlb_mod.MlbError("no network in tests")
+    monkeypatch.setattr(mlb_mod, "fetch_schedule", _boom)
+
+
+_TABLES = ["head_to_head_grants", "picks", "player_game_stats",
+           "lineups", "rosters", "games", "players", "weeks",
+           "settings", "members"]
 
 
 @pytest.fixture()

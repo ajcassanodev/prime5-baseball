@@ -11,10 +11,12 @@ def test_header_matches_football_site(client):
     assert '<img src="/static/logo.png" alt="Ravix logo">' in page.text
     assert "RAVIX <em>FANTASY SPORTS</em>" in page.text
     assert "Prime5 Baseball" in page.text
-    # Baseball nav: Pick, My picks, Standings, Help.
+    # Baseball nav: Pick, My picks, Standings, Matchups, Schedule, Help.
     assert '<a href="/picks">Pick</a>' in page.text
     assert '<a href="/dashboard">My picks</a>' in page.text
     assert '<a href="/standings">Standings</a>' in page.text
+    assert '<a href="/matchups">Matchups</a>' in page.text
+    assert '<a href="/schedule">Schedule</a>' in page.text
     assert 'href="mailto:help@ravixfs.com">Help</a>' in page.text
     # Favicon + brand fonts.
     assert '<link rel="icon" href="/static/logo.png">' in page.text

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Head-to-Head — Prime5 Baseball{% endblock %}
+{% block content %}
+<h1>Head-to-Head — {{ week_label }}</h1>
+{% if active_count < 2 %}
+<p class="sub">Head-to-head starts once more members join — every member faces one opponent a week, and the winner earns +1 batter pick for the following week.</p>
+{% else %}
+<p class="sub">Base lineup only — 5 batters + 1 pitcher. A bonus 6th batter never counts toward the matchup. Ties earn nothing.</p>
+
+<div class="dash-card">
+  <div class="dash-cardt">THIS WEEK'S MATCHUPS</div>
+  {% for r in rows %}
+  <div class="h2h-pair{% if r.mine %} h2h-mine{% endif %}">
+    <span class="h2h-side{% if r.final and r.winner == 'a' %} h2h-win{% elif r.final %} h2h-lose{% endif %}"><b>{{ r.a.display_name }}</b>{% if r.a.display_sub %}<span class="display-sub">{{ r.a.display_sub }}</span>{% endif %} {{ '%.2f'|format(r.a_points) }}</span>
+    <span class="h2h-vs">vs</span>
+    <span class="h2h-side h2h-right{% if r.final and r.winner == 'b' %} h2h-win{% elif r.final %} h2h-lose{% endif %}">{{ '%.2f'|format(r.b_points) }} <b>{{ r.b.display_name }}</b>{% if r.b.display_sub %}<span class="display-sub">{{ r.b.display_sub }}</span>{% endif %}</span>
+    {% if r.final %}
+      {% if r.winner == 'tie' %}<span class="h2h-tie">Tie — no pick</span>
+      {% else %}<span class="h2h-badge">+1 pick</span>{% endif %}
+    {% else %}<span class="h2h-live">Live</span>{% endif %}
+  </div>
+  {% endfor %}
+  {% if bye %}<p class="sub">{{ bye.display_name }} has a bye this week — no matchup, no pick.</p>{% endif %}
+</div>
+
+<div class="dash-card">
+  <div class="dash-cardt">HEAD-TO-HEAD RECORDS</div>
+  {% for r in records %}
+  <div class="dash-toprow"><span class="dash-trank">{{ loop.index }}</span><span><b>{{ r.member.display_name }}</b>{% if r.member.display_sub %}<span class="display-sub">{{ r.member.display_sub }}</span>{% endif %}{% if r.member.is_test %}<span class="tag">test</span>{% endif %}</span><span class="dash-ppts">{{ r.wins }}-{{ r.losses }}{% if r.ties %}-{{ r.ties }}{% endif %} · {{ r.picks_earned }} pick{{ 's' if r.picks_earned != 1 else '' }}</span></div>
+  {% else %}
+  <p class="sub">No head-to-head results yet.</p>
+  {% endfor %}
+</div>
+<div class="dash-foot"><a href="/schedule">See your schedule →</a></div>
+{% endif %}
+{% endblock %}
