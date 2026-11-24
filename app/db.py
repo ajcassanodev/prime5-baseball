@@ -40,6 +40,9 @@ def init_db() -> None:
         # legacy members, who fall back to the short name.
         ("screen_name", "TEXT"),
         ("show_full_name", "INTEGER NOT NULL DEFAULT 0"),
+        # Divisions (Nov 24, 2026): 'red' = Red Hots, 'white' = White
+        # Hots. Existing rows default to Red Hots.
+        ("division", "TEXT NOT NULL DEFAULT 'red'"),
     ):
         if col not in cols:
             con.execute(f"ALTER TABLE members ADD COLUMN {col} {ddl}")
@@ -54,6 +57,16 @@ def utcnow_iso() -> str:
 # ---------------------------------------------------------------- members
 
 MEMBER_STATUSES = ("pending", "active", "declined")
+
+
+# ---------------------------------------------------------------- divisions
+
+DIVISION_NAMES = {"red": "Red Hots", "white": "White Hots"}
+
+
+def division_display(division) -> str:
+    """'red' -> 'Red Hots'; unknown/None defaults to Red Hots."""
+    return DIVISION_NAMES.get(division or "red", "Red Hots")
 
 
 # ---------------------------------------------------------------- screen names
@@ -137,29 +150,32 @@ def create_member(con, name: str, email: str | None = None,
                   phone: str | None = None, played_2026: int | None = None,
                   referrer: str | None = None,
                   invite_token: str | None = None,
-                  screen_name: str | None = None) -> dict:
+                  screen_name: str | None = None,
+                  division: str = "red") -> dict:
     """Create a member and return {id, name, pick_token, is_test, status,
-    screen_name}.
+    screen_name, division}.
 
     Pending members get a pick token at registration, but it is unusable
     until approval flips them active (member_by_token refuses them).
     """
     if status not in MEMBER_STATUSES:
         raise ValueError(f"unknown member status: {status!r}")
+    if division not in DIVISION_NAMES:
+        raise ValueError(f"unknown division: {division!r}")
     token = secrets.token_urlsafe(24)
     cur = con.execute(
         "INSERT INTO members (name, email, pick_token, is_test, is_active,"
         " status, phone, played_2026, referrer, invite_token, screen_name,"
-        " created_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " division, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (name, email, token, 1 if is_test else 0,
          1 if status == "active" else 0, status, phone, played_2026,
-         referrer, invite_token, screen_name, utcnow_iso()),
+         referrer, invite_token, screen_name, division, utcnow_iso()),
     )
     con.commit()
     return {"id": cur.lastrowid, "name": name, "pick_token": token,
             "is_test": bool(is_test), "status": status,
-            "screen_name": screen_name}
+            "screen_name": screen_name, "division": division}
 
 
 def member_by_token(con, token: str):
@@ -234,6 +250,15 @@ def current_week(con, season: int):
 def current_season(con) -> int:
     row = con.execute("SELECT MAX(season) AS s FROM weeks").fetchone()
     return row["s"] if row and row["s"] else 2026
+
+
+def all_weeks(con, season: int) -> list:
+    """Every week of a season, earliest first."""
+    rows = con.execute(
+        "SELECT season, week, friday_date, label, playground FROM weeks"
+        " WHERE season = ? ORDER BY week", (season,),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def ensure_week(con, season: int, week: int, friday_date: str,
@@ -415,12 +440,12 @@ def delete_pick(con, member_id: int, season: int, week: int, slot: str) -> None:
 
 
 def standings(con, season: int, week: int) -> list:
-    """[{member, points, display_name, display_sub}] for one week,
-    test members flagged, best first. Sorted by points, then the
+    """[{member, points, display_name, display_sub, division}] for one
+    week, test members flagged, best first. Sorted by points, then the
     stored name — only the rendered text uses the screen name."""
     members = con.execute(
-        "SELECT id, name, screen_name, show_full_name, is_test FROM members"
-        " WHERE is_active = 1 ORDER BY name").fetchall()
+        "SELECT id, name, screen_name, show_full_name, is_test, division"
+        " FROM members WHERE is_active = 1 ORDER BY name").fetchall()
     stats = stats_for_week(con, season, week)
     out = []
     for m in members:
@@ -435,6 +460,76 @@ def standings(con, season: int, week: int) -> list:
                     "display_name": display_name(m),
                     "display_sub": display_sub(m),
                     "is_test": bool(m["is_test"]), "points": total,
-                    "picks_made": len(picks)})
+                    "picks_made": len(picks),
+                    "division": _row_val(m, "division") or "red"})
     out.sort(key=lambda r: (-r["points"], r["name"]))
     return out
+
+
+def top_performers(con, season: int, week: int) -> dict:
+    """Top batters (by hits) and pitchers (by points) for the full
+    week — day totals, so a doubleheader player's two games add up.
+
+    Returns {"batters": [{name, team, hits, points}] (top 5),
+    "pitchers": [{name, team, pitches, strikeouts, points}] (top 2)}.
+    Ties break by name so the order is stable; players with no
+    points don't make the board.
+    """
+    from .scoring import batter_points, pitcher_points
+    rows = con.execute(
+        "SELECT p.mlb_id, p.name, p.team, p.is_pitcher,"
+        " SUM(s.hits) AS hits, SUM(s.pitches) AS pitches,"
+        " SUM(s.strikeouts) AS strikeouts"
+        " FROM player_game_stats s"
+        " JOIN players p ON p.mlb_id = s.mlb_id"
+        " JOIN games g ON g.game_pk = s.game_pk"
+        " WHERE g.season = ? AND g.week = ?"
+        " GROUP BY p.mlb_id",
+        (season, week)).fetchall()
+    batters, pitchers = [], []
+    for r in rows:
+        if r["is_pitcher"]:
+            pts = pitcher_points(r["pitches"], r["strikeouts"])
+            if pts > 0:
+                pitchers.append({"name": r["name"], "team": r["team"],
+                                 "pitches": r["pitches"],
+                                 "strikeouts": r["strikeouts"], "points": pts})
+        else:
+            hits = r["hits"] or 0
+            if hits > 0:
+                batters.append({"name": r["name"], "team": r["team"],
+                                "hits": hits, "points": batter_points(hits)})
+    batters.sort(key=lambda b: (-b["hits"], b["name"]))
+    pitchers.sort(key=lambda p: (-p["points"], p["name"]))
+    return {"batters": batters[:5], "pitchers": pitchers[:2]}
+
+
+def hit_streak(con, member_id: int, season: int, week: int) -> int:
+    """Running count of consecutive hits from the member's picked
+    batters, in slot order (b1..b5) across weeks, up to `week`.
+
+    Every hit adds one; any hitless batter resets it to 0. Pitchers
+    don't count. A batter with no stat row in a game that is Final
+    did not play — hitless, resets. A batter with no stat row in a
+    game that hasn't finished yet is skipped: that week hasn't been
+    played, so it can't move the streak yet.
+    """
+    streak = 0
+    week_rows = con.execute(
+        "SELECT week FROM weeks WHERE season = ? AND week <= ? ORDER BY week",
+        (season, week)).fetchall()
+    for (wk,) in week_rows:
+        games = {g["game_pk"]: g for g in games_for_week(con, season, wk)}
+        stats = stats_for_week(con, season, wk)
+        for p in picks_for_member_week(con, member_id, season, wk):
+            if p["kind"] != "batter":
+                continue
+            stat = stats.get((p["game_pk"], p["mlb_id"]))
+            if stat is not None:
+                hits = stat.get("hits", 0)
+            elif games.get(p["game_pk"], {}).get("status") == "Final":
+                hits = 0  # DNP in a finished game
+            else:
+                continue  # game not played yet
+            streak = streak + 1 if hits > 0 else 0
+    return streak

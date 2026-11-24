@@ -371,7 +371,10 @@ def test_http_submit_doubleheader_both_games(con, client):
     assert dash.status_code == 200
     # Busch 2 + 2, Anthony 3, Alonso 3, Ramos 2 = 12; Beck 8.97.
     assert "20.97" in dash.text
-    assert dash.text.count("Michael Busch") == 2
+    # Two pick rows for Busch (one per doubleheader game). The bare
+    # name also appears in the donut data and top performers, so
+    # count the pick-row rendering specifically.
+    assert dash.text.count("<b>Michael Busch</b>") == 2
 
 
 def test_standings_marks_test_members(con, client):

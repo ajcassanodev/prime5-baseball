@@ -16,6 +16,8 @@ declined members cannot sign in — their token works only once approved.
 import os
 import secrets
 
+from datetime import date, timedelta
+
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -60,6 +62,8 @@ def _current_member(request: Request):
     member["short_name"] = dbmod.short_name(member["name"])
     member["display_name"] = dbmod.display_name(member)
     member["display_sub"] = dbmod.display_sub(member)
+    member["division"] = member.get("division") or "red"
+    member["division_name"] = dbmod.division_display(member["division"])
     return member
 
 
@@ -486,6 +490,38 @@ def submit_picks(request: Request,
         con.close()
 
 
+def _ordinal(n: int) -> str:
+    """1 -> '1st', 2 -> '2nd', 3 -> '3rd', 4 -> '4th', 11 -> '11th'."""
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def _week_total(con, member_id: int, season: int, week_num: int) -> float:
+    picks = dbmod.picks_for_member_week(con, member_id, season, week_num)
+    stats = dbmod.stats_for_week(con, season, week_num)
+    return week_points(
+        [{"kind": p["kind"], "mlb_id": p["mlb_id"], "game_pk": p["game_pk"]}
+         for p in picks], stats)
+
+
+def _next_lock_label(friday_date: str) -> str:
+    """'Next Friday · 1:05 PM ET' — earliest first pitch of the next
+    Friday from the MLB schedule. Falls back to plain 'Next Friday'
+    when the schedule is unavailable; never blocks the dashboard."""
+    try:
+        nxt = (date.fromisoformat(friday_date) + timedelta(days=7)).isoformat()
+        games = mlb_mod.parse_schedule(mlb_mod.fetch_schedule(nxt))
+        if not games:
+            return "Next Friday"
+        earliest = min(g["game_date_utc"] for g in games)
+        return f"Next Friday · {mlb_mod.first_pitch_et(earliest)} ET"
+    except Exception:
+        return "Next Friday"
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
     member = _need_member(request)
@@ -530,10 +566,52 @@ def dashboard(request: Request):
         total = week_points(
             [{"kind": p["kind"], "mlb_id": p["mlb_id"], "game_pk": p["game_pk"]}
              for p in picks], stats)
+        # The dashboard is division-scoped: rank, gap and the top-5
+        # standings card all come from the viewing member's division.
+        division = member.get("division") or "red"
+        div_rows = [r for r in dbmod.standings(con, season, week["week"])
+                    if r.get("division") == division]
+        rank = next((i + 1 for i, r in enumerate(div_rows)
+                     if r["member_id"] == member["id"]), None)
+        leader = div_rows[0] if div_rows else None
+        gap = (leader["points"] - total) if leader else 0.0
+        rank_label = (f"{_ordinal(rank)} in "
+                      f"{dbmod.division_display(division)}" if rank else "")
+        # Season points by week (one slice per week played).
+        season_pie = []
+        for w in dbmod.all_weeks(con, season):
+            if w["week"] > week["week"]:
+                continue
+            wtotal = _week_total(con, member["id"], season, w["week"])
+            if wtotal > 0:
+                name = ("Playground week" if w.get("playground")
+                        else (w.get("label") or f"Week {w['week']}"))
+                season_pie.append({"name": name, "points": wtotal})
+        # This week by player, biggest slice first (stable sort keeps
+        # slot order on ties); zero-point players don't chart.
+        week_pie = sorted(
+            ({"name": r["name"], "points": r["points"]} for r in rows
+             if r["points"] > 0),
+            key=lambda d: -d["points"])
+        week_date_label = date.fromisoformat(
+            week["friday_date"]).strftime("%a %b %-d").upper()
         return _render(request, "dashboard.html",
                        {"member": member, "season": season, "week": week,
                         "week_label": week.get("label") or f"Week {week['week']}",
-                        "rows": rows, "total": total, "complete": len(picks) == 6})
+                        "week_date_label": week_date_label,
+                        "playground": bool(week.get("playground")),
+                        "rows": rows, "total": total, "complete": len(picks) == 6,
+                        "rank": rank, "gap": gap,
+                        "leader_name": leader["display_name"] if leader else None,
+                        "rank_label": rank_label,
+                        "division_name": dbmod.division_display(division),
+                        "division_class": f"div-{division}",
+                        "div_rows": div_rows[:5],
+                        "season_pie": season_pie, "week_pie": week_pie,
+                        "top": dbmod.top_performers(con, season, week["week"]),
+                        "streak": dbmod.hit_streak(con, member["id"], season,
+                                                   week["week"]),
+                        "next_lock": _next_lock_label(week["friday_date"])})
     finally:
         con.close()
 

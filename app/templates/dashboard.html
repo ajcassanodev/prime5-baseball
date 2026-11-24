@@ -1,21 +1,127 @@
 {% extends "base.html" %}
-{% block title %}My picks — Prime5 Baseball{% endblock %}
+{% block title %}{{ member.display_name }}'s Dashboard — Prime5 Baseball{% endblock %}
 {% block content %}
-<h1>My picks — {{ week_label }}</h1>
-<p class="sub"><b>{{ member.display_name }}</b>{% if member.display_sub %}<span class="display-sub">{{ member.display_sub }}</span>{% endif %}{% if member.is_test %} <span class="tag">test member</span>{% endif %}</p>
-{% if rows %}
-  {% for r in rows %}
-  <div class="row" style="cursor:default;">
-    <span class="num">{{ r.slot }}</span>
-    <span class="main"><b>{{ r.name }}</b> <span class="sub2">{{ r.team }} · {{ r.kind }}</span><br>
-    <span class="sub2">{{ r.game_label }} · {{ r.time_et }} ET</span></span>
-    <span class="right">{{ r.detail }} · {{ '%g'|format(r.points) }} pts</span>
+<div class="dash-head">
+  <div>
+    <div class="dash-eyebrow">PRIME5 BASEBALL{% if playground %} · PLAYGROUND{% endif %}</div>
+    <h1 class="dash-title">{{ member.display_name }}'s Dashboard</h1>
+    <p class="sub"><b>{{ member.display_name }}</b>{% if member.display_sub %}<span class="display-sub">{{ member.display_sub }}</span>{% endif %}{% if member.is_test %} <span class="tag">test member</span>{% endif %}</p>
   </div>
-  {% endfor %}
-  <div class="total">Week total: {{ '%.2f'|format(total) }} pts</div>
-  {% if not complete %}<p><a href="/picks">Finish your picks →</a></p>{% endif %}
-{% else %}
-  <p>You have no picks yet this week.</p>
-  <p><a href="/picks">Make your picks →</a></p>
-{% endif %}
+  <div class="dash-badge">{{ week_label }}</div>
+</div>
+
+<div class="dash-rank">
+  <div class="dash-place">#{{ rank or "–" }}</div>
+  <div>
+    <div class="dash-pts">{{ '%.2f'|format(total) }} <span>pts</span></div>
+    <div class="dash-gap">
+      {% if rank == 1 %}Leading the league
+      {% elif gap == 0 %}Tied at the top
+      {% else %}{{ '%.2f'|format(gap) }} behind {{ leader_name }}{% endif %}{% if rank_label %} · {{ rank_label }}{% endif %}
+    </div>
+  </div>
+  <div class="dash-next">Next lock<br><b>{{ next_lock }}</b></div>
+</div>
+
+<div class="dash-grid">
+  <div class="dash-card">
+    <div class="dash-cardt">SEASON POINTS — WHERE THEY COME FROM</div>
+    <div class="dash-donutwrap"><div id="dash-d1"></div><div class="dash-legend" id="dash-l1"></div></div>
+    {% if playground %}<p class="sub">Season starts Mar 26, 2027 — the playground is one week.</p>{% endif %}
+  </div>
+  <div class="dash-card">
+    <div class="dash-cardt">THIS WEEK — WHERE THEY COME FROM</div>
+    <div class="dash-donutwrap"><div id="dash-d2"></div><div class="dash-legend" id="dash-l2"></div></div>
+  </div>
+</div>
+
+<div class="dash-card">
+  <div class="dash-cardt">MY PICKS — {{ week_label }} <a href="/picks" class="dash-edit">Edit picks →</a></div>
+  {% if rows %}
+    {% for r in rows %}
+    <div class="row" style="cursor:default;">
+      <span class="num">{{ r.slot }}</span>
+      <span class="main"><b>{{ r.name }}</b> <span class="sub2">{{ r.team }} · {{ r.kind }}</span><br>
+      <span class="sub2">{{ r.game_label }} · {{ r.time_et }} ET</span></span>
+      <span class="right">{{ r.detail }} · {{ '%g'|format(r.points) }} pts</span>
+    </div>
+    {% endfor %}
+    <div class="total">Week total: {{ '%.2f'|format(total) }} pts</div>
+    {% if not complete %}<p><a href="/picks">Finish your picks →</a></p>{% endif %}
+  {% else %}
+    <p>You have no picks yet this week.</p>
+    <p><a href="/picks">Make your picks →</a></p>
+  {% endif %}
+  <p class="sub">Hit streak: <b>{{ streak }}</b> — every hit adds one, any hitless batter resets it. Best streak wins $50.</p>
+</div>
+
+<div class="dash-grid">
+  <div class="dash-card">
+    <div class="dash-cardt">TOP PERFORMERS — {{ week_date_label }} (FULL DAY)</div>
+    {% if top.batters or top.pitchers %}
+      <div class="dash-subhead">BATTERS</div>
+      {% for b in top.batters %}
+      <div class="dash-toprow"><span class="dash-trank">{{ loop.index }}</span><span class="dash-pname">{{ b.name }}</span><span class="dash-team">{{ b.team }} · {{ b.hits }} H</span><span class="dash-ppts">{{ '%.2f'|format(b.points) }}</span></div>
+      {% else %}<p class="sub">No batter hits yet.</p>{% endfor %}
+      <div class="dash-subhead">PITCHERS</div>
+      {% for p in top.pitchers %}
+      <div class="dash-toprow"><span class="dash-trank">{{ loop.index }}</span><span class="dash-pname">{{ p.name }}</span><span class="dash-team">{{ p.team }} · {{ p.pitches }} pitches · {{ p.strikeouts }} K</span><span class="dash-ppts">{{ '%.2f'|format(p.points) }}</span></div>
+      {% else %}<p class="sub">No pitcher points yet.</p>{% endfor %}
+    {% else %}
+      <p class="sub">No games scored yet.</p>
+    {% endif %}
+  </div>
+  <div class="dash-card">
+    <div class="dash-cardt">STANDINGS — TOP 5</div>
+    <div class="dash-div {{ division_class }}">{{ division_name }}</div>
+    {% for r in div_rows %}
+    <div class="dash-toprow"><span class="dash-trank">{{ loop.index }}</span><span><b>{{ r.display_name }}</b>{% if r.display_sub %}<span class="display-sub">{{ r.display_sub }}</span>{% endif %}{% if r.is_test %}<span class="tag">test</span>{% endif %}</span><span class="dash-ppts">{{ '%.2f'|format(r.points) }}</span></div>
+    {% else %}
+    <p class="sub">No standings yet.</p>
+    {% endfor %}
+    <div class="dash-foot"><a href="/standings">See full standings →</a></div>
+  </div>
+</div>
+
+<div class="dash-card">
+  <div class="dash-cardt">HOW SCORING WORKS</div>
+  <p>1 pt per hit · pitcher 0.01 per pitch + 1 per K · picks lock at first pitch.</p>
+  <p class="sub">Captain (coming preseason): your captain's HR + RBI count too.</p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var palette = ['#45c2ff', '#f5c451', '#4ade80', '#c7d2e0', '#d08a4e', '#a78bfa', '#fb923c', '#f472b6'];
+  function donut(svgId, legId, data) {
+    var svgEl = document.getElementById(svgId), legEl = document.getElementById(legId);
+    if (!svgEl || !legEl) return;
+    var total = data.reduce(function (a, s) { return a + s.points; }, 0);
+    if (!data.length || total <= 0) {
+      legEl.innerHTML = '<p class="sub" style="margin:0">No points yet.</p>';
+      return;
+    }
+    var acc = 0, circles = '';
+    data.forEach(function (s, i) {
+      var color = palette[i % palette.length];
+      var frac = s.points / total;
+      circles += '<circle cx="70" cy="70" r="54" fill="none" stroke="' + color +
+        '" stroke-width="20" pathLength="100" stroke-dasharray="' + (frac * 100).toFixed(2) +
+        ' 100" stroke-dashoffset="' + (25 - acc * 100).toFixed(2) + '"/>';
+      acc += frac;
+      s._color = color;
+    });
+    svgEl.innerHTML = '<svg viewBox="0 0 140 140" width="118" height="118">' + circles +
+      '<text x="70" y="68" text-anchor="middle" fill="#eef3f8" font-size="21" font-weight="700">' +
+      total.toFixed(2) + '</text>' +
+      '<text x="70" y="88" text-anchor="middle" fill="#9aa7b8" font-size="11">pts</text></svg>';
+    legEl.innerHTML = data.map(function (s) {
+      return '<div class="dash-leg"><span class="dash-sw" style="background:' + s._color + '"></span>' +
+        s.name + '<b>' + s.points.toFixed(2) + '</b></div>';
+    }).join('');
+  }
+  donut('dash-d1', 'dash-l1', {{ season_pie|tojson }});
+  donut('dash-d2', 'dash-l2', {{ week_pie|tojson }});
+})();
+</script>
 {% endblock %}

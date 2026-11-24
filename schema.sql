@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS members (
     screen_name TEXT,
     show_full_name INTEGER NOT NULL DEFAULT 0,  -- 1 = show the full
     -- name under the screen name instead of first name + last initial
+    -- Division (Nov 24, 2026): 'red' = Red Hots, 'white' = White Hots.
+    division TEXT NOT NULL DEFAULT 'red',
     created_at TEXT NOT NULL
 );
 
