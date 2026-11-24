@@ -4,16 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Prime5 Baseball{% endblock %}</title>
+  <link rel="icon" href="/static/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header class="top">
-    <span class="brand">PRIME5 BASEBALL</span>
-    <nav>
-      <a href="/picks">Pick</a>
-      <a href="/dashboard">My picks</a>
-      <a href="/standings">Standings</a>
-    </nav>
+  <header>
+    <div class="wrap">
+      <a class="brand" href="/">
+        <img src="/static/logo.png" alt="Ravix logo">
+        <span class="brand-text"><span>RAVIX <em>FANTASY SPORTS</em></span><small>Prime5 Baseball</small></span>
+      </a>
+      <nav>
+        <a href="/picks">Pick</a>
+        <a href="/dashboard">My picks</a>
+        <a href="/standings">Standings</a>
+        <a href="mailto:help@ravixfs.com">Help</a>
+      </nav>
+    </div>
   </header>
   <div class="wrap">
     {% block content %}{% endblock %}
