@@ -236,6 +236,9 @@ def test_header_settings_button_only_when_signed_in(con, client):
     # The button is a gear icon, not a text label.
     assert 'aria-label="Settings"' in page.text
     assert "<svg" in page.text
+    # The gear sits inside the nav, right after the Help link.
+    assert page.text.index("<nav>") < page.text.index('id="settingsBtn"') < page.text.index("</nav>")
+    assert page.text.index(">Help<") < page.text.index('id="settingsBtn"')
     assert 'id="fullNameSwitch"' in page.text
     assert "Show my full name" in page.text
     # The description uses the member's own names.

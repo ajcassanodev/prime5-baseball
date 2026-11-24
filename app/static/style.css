@@ -30,20 +30,18 @@ header .wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; p
 .brand span em { font-style: normal; color: var(--cyan); }
 .brand-text { display: flex; flex-direction: column; gap: 2px; }
 .brand-text small { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 11px; letter-spacing: .28em; color: var(--muted); text-transform: uppercase; }
-nav { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
+nav { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 nav a { color: var(--muted); text-decoration: none; font-weight: 500; font-size: .95rem;
   padding: .45rem .75rem; border-radius: 8px; }
 nav a:hover { color: var(--text); background: rgba(255,255,255,.05); }
 @media (max-width: 640px) {
   .brand span { font-size: 16px; }
-  nav { margin-left: 0; width: 100%; order: 3; }
+  nav { margin-left: 0; width: 100%; }
   nav a { padding: .75rem .6rem; font-size: .92rem; min-height: 44px; display: inline-flex; align-items: center; }
-  /* Gear stays on the top row, far right, while the nav drops below. */
-  .settings { margin-left: auto; order: 2; }
   .settings-btn { width: 44px; height: 44px; }
 }
 /* Header settings dropdown (screen names, Nov 24, 2026). */
-.settings { position: relative; margin-left: 12px; }
+.settings { position: relative; margin-left: 8px; }
 .settings-btn {
   background: transparent; color: var(--muted);
   border: none; border-radius: 50%;
