@@ -40,6 +40,7 @@
             <p class="sub">No picks yet.</p>
             {% endfor %}
           </div>
+          <div class="h2h-divider" aria-hidden="true"></div>
           <div class="h2h-col">
             <div class="h2h-colhead"><b>{{ detail.b.display_name }}</b>{% if detail.b.display_sub %}<span class="display-sub">{{ detail.b.display_sub }}</span>{% endif %} · {{ '%.2f'|format(detail.b_total) }} pts</div>
             {% for p in detail.b_picks %}
