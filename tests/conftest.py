@@ -24,7 +24,8 @@ def no_mlb_network(monkeypatch):
 
 
 _TABLES = ["head_to_head_grants", "auto_pick_declines", "picks",
-           "player_game_stats", "lineups", "rosters", "games", "players",
+           "player_game_stats", "player_form", "game_weather",
+           "lineups", "rosters", "games", "players",
            "weeks", "settings", "members"]
 
 

@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app import auto_pick as auto_pick_mod
 from app import db as dbmod
+from app import form_ingest as form_ingest_mod
 from app import mlb as mlb_mod
 
 
@@ -94,6 +95,21 @@ def main() -> None:
     else:
         week = args.week
     ingest_date(con, season, week, args.date, playground=args.playground)
+    # Pick-help form + weather (Nov 25, 2026): computed from the
+    # week's boxscores + season stats + Open-Meteo, stored in the DB
+    # for the pick page. A failure here must never take down the
+    # ingest — the data above is already committed — so it is
+    # reported, not raised.
+    try:
+        counts = form_ingest_mod.refresh_form_and_weather(
+            con, season, week, args.date)
+    except Exception as exc:  # noqa: BLE001 — ingest already landed
+        print(f"form/weather refresh failed for {args.date}: {exc}",
+              flush=True)
+    else:
+        if counts["form"] or counts["weather"]:
+            print(f"pick-help: {counts['form']} form row(s),"
+                  f" {counts['weather']} weather row(s) for {args.date}")
     # Auto-pick (Nov 24, 2026): fill opted-in members' empty slots
     # from the lineups just ingested. A fill failure must never take
     # down the ingest — the data above is already committed — so it

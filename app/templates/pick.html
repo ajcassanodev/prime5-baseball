@@ -39,9 +39,37 @@
   </div>
 
   <h2>Batters — pick 5 <span class="sub" id="bCount"></span></h2>
+  {% if form_guide.show %}
+  {# Form guide (Nov 25, 2026): who's hot going into Friday, plus
+     the longest hit streaks and how the numbers are made. One
+     collapsible section at the top of the pick page — the dashboard
+     stays untouched. Starts open; members can hide it. #}
+  <details class="form-guide" open>
+    <summary>
+      <span><b>Form guide</b> <span class="sub">· who's hot going into Friday</span></span>
+      <span class="guide-chev">▾</span>
+    </summary>
+    {% if form_guide.hottest %}
+    <div class="guide-sub">Hottest batters · hits, last 7 days</div>
+    {% for h in form_guide.hottest %}
+    <div class="guide-row"><span><b>{{ loop.index }}. {{ h.name }}</b> <span class="sub2">{{ h.team }}</span></span><span><b class="gold">{{ h.hits_last_7d }}</b> hits{% if h.hit_prob_pct is not none %} · <b class="gold">{{ h.hit_prob_pct }}%</b> hit Fri{% endif %}</span></div>
+    {% endfor %}
+    {% endif %}
+    {% if form_guide.starters %}
+    <div class="guide-sub">Top Friday starters · last outing</div>
+    {% for s in form_guide.starters %}
+    <div class="guide-row"><span><b>{{ loop.index }}. {{ s.name }}</b> <span class="sub2">{{ s.team }}</span></span><span>{% if s.last_start_pitches is not none %}{{ s.last_start_pitches }} pitches · {{ s.last_start_k }} K · {% endif %}<b class="gold">{{ s.five_k_prob_pct }}%</b> 5+ K Fri</span></div>
+    {% endfor %}
+    {% endif %}
+    {% if form_guide.streaks %}
+    <p class="sub guide-streaks">Longest streaks: {% for s in form_guide.streaks %}<b>{{ s.short }} {{ s.streak }}</b>{% if not loop.last %} · {% endif %}{% endfor %} — 5 in a row earns +1 batter next week.</p>
+    {% endif %}
+    <p class="sub guide-note">How it's calculated: {{ form_guide.note }}</p>
+  </details>
+  {% endif %}
   {% for g in groups %}
     <button type="button" class="game-head" data-game-toggle="b-{{ g.game_pk }}" data-count-label="batters" aria-expanded="{{ 'true' if loop.first else 'false' }}">
-      <span>{{ g.label }} · {{ g.time_et }} ET{% if g.status == "Final" %} · Final{% endif %}</span>
+      <span class="game-main"><span>{{ g.label }} · {{ g.time_et }} ET{% if g.status == "Final" %} · Final{% endif %}</span>{% if g.weather_line %}<span class="game-weather">{{ g.weather_line }}{% if g.delay_risk %} <span class="tag delay">Delay risk</span>{% endif %}</span>{% endif %}</span>
       <span class="game-count" data-count-for="b-{{ g.game_pk }}">{{ g.batters|length }} batters</span>
       <span class="chev">{{ '▾' if loop.first else '▸' }}</span>
     </button>
@@ -51,8 +79,9 @@
       <span class="num"></span>
       <span class="dot {{ b.status }}"></span>
       <span class="main"><b>{{ b.name }}</b>{% if b.auto %} <span class="tag auto">AUTO</span>{% endif %} <span class="sub2">{{ b.team }} · {{ b.position }}</span><br>
-      <span class="sub2">{{ g.time_et }} · vs {{ b.vs or "TBD" }}</span></span>
-      <span class="right">{% if b.status == "out" %}Not in lineup{% elif b.points is not none %}{{ b.hits }} H · {{ '%g'|format(b.points) }} pts{% else %}—{% endif %}</span>
+      <span class="sub2">{{ g.time_et }} · vs {{ b.vs or "TBD" }}</span>{% if b.form_line %}<br>
+      <span class="sub2 form-line">{{ b.form_line }}</span>{% endif %}</span>
+      <span class="right">{% if b.status == "out" %}Not in lineup{% elif b.points is not none %}{{ b.hits }} H · {{ '%g'|format(b.points) }} pts{% elif b.prob_pct is not none %}<span class="prob">{{ b.prob_pct }}%</span><br><span class="sub2">hit Friday</span>{% else %}—{% endif %}</span>
     </button>
     {% endfor %}
     </div>
@@ -61,7 +90,7 @@
   <h2>Pitcher — pick 1</h2>
   {% for g in groups %}
     <button type="button" class="game-head" data-game-toggle="p-{{ g.game_pk }}" data-count-label="pitchers" aria-expanded="{{ 'true' if loop.first else 'false' }}">
-      <span>{{ g.label }} · {{ g.time_et }} ET{% if g.status == "Final" %} · Final{% endif %}</span>
+      <span class="game-main"><span>{{ g.label }} · {{ g.time_et }} ET{% if g.status == "Final" %} · Final{% endif %}</span>{% if g.weather_line %}<span class="game-weather">{{ g.weather_line }}{% if g.delay_risk %} <span class="tag delay">Delay risk</span>{% endif %}</span>{% endif %}</span>
       <span class="game-count" data-count-for="p-{{ g.game_pk }}">{{ g.pitchers|length }} pitchers</span>
       <span class="chev">{{ '▾' if loop.first else '▸' }}</span>
     </button>
@@ -71,8 +100,9 @@
       <span class="num"></span>
       <span class="dot {{ p.status }}"></span>
       <span class="main"><b>{{ p.name }}</b>{% if p.auto %} <span class="tag auto">AUTO</span>{% endif %} <span class="sub2">{{ p.team }}</span><br>
-      <span class="sub2">{{ g.time_et }} · vs {{ p.vs or "TBD" }}</span></span>
-      <span class="right">{% if p.points is not none %}{{ p.pitches }} pitches · {{ p.strikeouts }} K · {{ '%.2f'|format(p.points) }} pts{% else %}—{% endif %}</span>
+      <span class="sub2">{{ g.time_et }} · vs {{ p.vs or "TBD" }}</span>{% if p.form_line %}<br>
+      <span class="sub2 form-line">{{ p.form_line }}</span>{% endif %}</span>
+      <span class="right">{% if p.points is not none %}{{ p.pitches }} pitches · {{ p.strikeouts }} K · {{ '%.2f'|format(p.points) }} pts{% elif p.prob_pct is not none %}<span class="prob">{{ p.prob_pct }}%</span><br><span class="sub2">5+ K Fri</span>{% else %}—{% endif %}</span>
     </button>
     {% endfor %}
     </div>

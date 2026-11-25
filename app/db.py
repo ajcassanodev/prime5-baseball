@@ -291,6 +291,91 @@ def auto_declined_slots(con, member_id: int, season: int, week: int) -> set:
     return {r["slot"] for r in rows}
 
 
+# ---------------------------------------------------------------- pick-help form + weather (Nov 25, 2026)
+
+def upsert_player_form(con, season: int, week: int, row: dict) -> None:
+    con.execute(
+        "INSERT INTO player_form (season, week, mlb_id, is_pitcher,"
+        " hits_last_7d, ab_last_7d, streak, season_avg, hit_prob_pct,"
+        " last_start_pitches, last_start_k, five_k_prob_pct, computed_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT(season, week, mlb_id) DO UPDATE SET"
+        " is_pitcher = excluded.is_pitcher,"
+        " hits_last_7d = excluded.hits_last_7d,"
+        " ab_last_7d = excluded.ab_last_7d, streak = excluded.streak,"
+        " season_avg = excluded.season_avg,"
+        " hit_prob_pct = excluded.hit_prob_pct,"
+        " last_start_pitches = excluded.last_start_pitches,"
+        " last_start_k = excluded.last_start_k,"
+        " five_k_prob_pct = excluded.five_k_prob_pct,"
+        " computed_at = excluded.computed_at",
+        (season, week, row["mlb_id"], 1 if row.get("is_pitcher") else 0,
+         row.get("hits_last_7d", 0), row.get("ab_last_7d", 0),
+         row.get("streak", 0), row.get("season_avg"),
+         row.get("hit_prob_pct"), row.get("last_start_pitches"),
+         row.get("last_start_k"), row.get("five_k_prob_pct"),
+         utcnow_iso()),
+    )
+
+
+def player_form_for_week(con, season: int, week: int) -> dict:
+    """{mlb_id: form row} for one week, with the player name/team
+    joined in for the Form guide."""
+    rows = con.execute(
+        "SELECT f.*, p.name, p.team FROM player_form f"
+        " JOIN players p ON p.mlb_id = f.mlb_id"
+        " WHERE f.season = ? AND f.week = ?", (season, week)).fetchall()
+    return {r["mlb_id"]: dict(r) for r in rows}
+
+
+def upsert_game_weather(con, game_pk: int, row: dict) -> None:
+    con.execute(
+        "INSERT INTO game_weather (game_pk, venue, temp_f, conditions,"
+        " precip_prob, wind_mph, wind_compass, delay_risk, computed_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT(game_pk) DO UPDATE SET venue = excluded.venue,"
+        " temp_f = excluded.temp_f, conditions = excluded.conditions,"
+        " precip_prob = excluded.precip_prob,"
+        " wind_mph = excluded.wind_mph,"
+        " wind_compass = excluded.wind_compass,"
+        " delay_risk = excluded.delay_risk,"
+        " computed_at = excluded.computed_at",
+        (game_pk, row.get("venue"), row.get("temp_f"),
+         row.get("conditions"), row.get("precip_prob"),
+         row.get("wind_mph"), row.get("wind_compass"),
+         1 if row.get("delay_risk") else 0, utcnow_iso()),
+    )
+
+
+def game_weather_for_week(con, season: int, week: int) -> dict:
+    """{game_pk: weather row} for one week."""
+    rows = con.execute(
+        "SELECT w.* FROM game_weather w JOIN games g"
+        " ON g.game_pk = w.game_pk WHERE g.season = ? AND g.week = ?",
+        (season, week)).fetchall()
+    return {r["game_pk"]: dict(r) for r in rows}
+
+
+def weather_line(row: dict | None) -> str:
+    """'Fenway Park · 68°F · Partly cloudy · Wind 11 mph from NW' —
+    blank when there is no weather row or no usable values."""
+    if not row:
+        return ""
+    parts = []
+    if row.get("venue"):
+        parts.append(row["venue"])
+    if row.get("temp_f") is not None:
+        parts.append(f"{row['temp_f']}°F")
+    if row.get("conditions"):
+        parts.append(row["conditions"])
+    if row.get("wind_mph") is not None:
+        wind = f"Wind {row['wind_mph']} mph"
+        if row.get("wind_compass"):
+            wind += f" from {row['wind_compass']}"
+        parts.append(wind)
+    return " · ".join(parts)
+
+
 # ---------------------------------------------------------------- weeks / games
 
 def current_week(con, season: int):

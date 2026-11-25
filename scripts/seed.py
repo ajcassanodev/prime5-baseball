@@ -49,6 +49,13 @@ def main() -> None:
                          row.get("batting_order"))
     for stat in seed["stats"]:
         dbmod.upsert_stats(con, stat["game_pk"], stat)
+    # Pick-help form + weather (Nov 25, 2026): real Sep 18–24 form
+    # and Sep 25 weather, computed by scripts/backfill_form_seed.py
+    # and stored in the seed file so staging shows real values.
+    for row in seed.get("form", []):
+        dbmod.upsert_player_form(con, seed["season"], seed["week"], row)
+    for row in seed.get("weather", []):
+        dbmod.upsert_game_weather(con, row["game_pk"], row)
     row = con.execute(
         "SELECT * FROM members WHERE name = 'Demo Tester' AND is_test = 1"
     ).fetchone()

@@ -25,6 +25,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import db as dbmod
 from . import emailer
+from . import form_guide as form_guide_mod
 from . import lineup as lineup_mod
 from . import matchups as matchups_mod
 from . import mlb as mlb_mod
@@ -326,6 +327,10 @@ def _pick_page_data(con, member, season, week):
     """Assemble pick-page rows grouped by game time."""
     games = dbmod.games_for_week(con, season, week)
     stats = dbmod.stats_for_week(con, season, week)
+    # Pick-help form + weather (Nov 25, 2026): read from the DB rows
+    # the poller computed — the page never calls live APIs.
+    form = dbmod.player_form_for_week(con, season, week)
+    weather = dbmod.game_weather_for_week(con, season, week)
     mine = {p["slot"]: p for p in
             dbmod.picks_for_member_week(con, member["id"], season, week)}
     # Keyed by (game, player): on a doubleheader day the same player
@@ -350,6 +355,7 @@ def _pick_page_data(con, member, season, week):
         batters, pitchers = [], []
         for player in roster:
             stat = stats.get((g["game_pk"], player["mlb_id"]))
+            frow = form.get(player["mlb_id"])
             if player["is_pitcher"]:
                 if player["mlb_id"] not in starter_ids:
                     continue  # pitcher list is Friday starters only
@@ -367,6 +373,9 @@ def _pick_page_data(con, member, season, week):
                     "vs": opp["name"],
                     "slot": my_ids.get((g["game_pk"], player["mlb_id"])),
                     "auto": _auto_for(g["game_pk"], player["mlb_id"]),
+                    "form_line": form_guide_mod.pitcher_form_line(frow),
+                    "prob_pct": (frow.get("five_k_prob_pct")
+                                 if frow else None),
                 })
             else:
                 order = (game_lineup["batting_order"].index(player["mlb_id"])
@@ -385,6 +394,9 @@ def _pick_page_data(con, member, season, week):
                     "vs": opp["name"],
                     "slot": my_ids.get((g["game_pk"], player["mlb_id"])),
                     "auto": _auto_for(g["game_pk"], player["mlb_id"]),
+                    "form_line": form_guide_mod.batter_form_line(frow),
+                    "prob_pct": (frow.get("hit_prob_pct")
+                                 if frow else None),
                 })
         batters.sort(key=lambda b: (b["status"] != "in", b["order"], b["name"]))
         pitchers.sort(key=lambda p: p["name"])
@@ -393,6 +405,9 @@ def _pick_page_data(con, member, season, week):
             "label": f"{g['away_team']} @ {g['home_team']}",
             "time_et": mlb_mod.first_pitch_et(g["game_date_utc"]),
             "status": g["status"],
+            "weather_line": dbmod.weather_line(weather.get(g["game_pk"])),
+            "delay_risk": bool((weather.get(g["game_pk"]) or {})
+                               .get("delay_risk")),
             "batters": batters,
             "pitchers": pitchers,
         })
@@ -402,9 +417,20 @@ def _pick_page_data(con, member, season, week):
     # the member edits a saved bonus pick, even after the grant is spent.
     matchups_mod.award_grants_through(con, season, week)
     grant = dbmod.available_grant(con, member["id"], season, week)
+    # Form guide (Nov 25, 2026): hottest Friday batters, top Friday
+    # starters, longest streaks — from the week's form rows. Empty
+    # lists render nothing; the guide is omitted entirely when the
+    # poller hasn't computed form for the week yet.
+    friday_batters = {p["mlb_id"] for g in groups for p in g["batters"]}
+    friday_starters = {p["mlb_id"] for g in groups for p in g["pitchers"]}
+    guide = form_guide_mod.build_guide(
+        list(form.values()), friday_batters, friday_starters)
+    guide["show"] = bool(guide["hottest"] or guide["starters"]
+                         or guide["streaks"])
     return {
         "member": member, "season": season, "week": week,
         "groups": groups,
+        "form_guide": guide,
         "my_batter_count": sum(1 for p in mine.values() if p["kind"] == "batter"),
         "my_pitcher": next((p for p in mine.values() if p["kind"] == "pitcher"), None),
         "complete": dbmod.has_base_lineup(mine.values()),

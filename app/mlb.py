@@ -71,6 +71,100 @@ def fetch_game_log(person_id: int, group: str, season: int) -> dict:
         f"&group={group}&season={season}")
 
 
+def fetch_people_stats(person_ids: list, group: str, season: int,
+                       chunk: int = 100) -> dict:
+    """Batched season stats for many players in one call per chunk.
+
+    /people?personIds=...&hydrate=stats(group=[hitting|pitching],
+    type=[season],season=YYYY) returns each player's season splits
+    inline — far cheaper than one call per player. Returns the raw
+    payloads concatenated (a list of 'people' dicts).
+    """
+    from urllib.parse import quote
+    people = []
+    for i in range(0, len(person_ids), chunk):
+        ids = ",".join(str(p) for p in person_ids[i:i + chunk])
+        hydrate = quote(
+            f"stats(group=[{group}],type=[season],season={season})",
+            safe="")
+        payload = _get_json(
+            f"{BASE_URL}/people?personIds={ids}&hydrate={hydrate}")
+        people.extend(payload.get("people", []))
+    return {"people": people}
+
+
+def _ip_to_outs(ip) -> int:
+    """Innings pitched as MLB reports it ('101.1' = 101 innings + 1
+    out) -> total outs. Accepts a string or a number."""
+    text = str(ip or "0")
+    if "." in text:
+        whole, frac = text.split(".", 1)
+        return int(whole or 0) * 3 + int(frac or 0)
+    return int(text or 0) * 3
+
+
+def parse_people_stats(raw: dict, group: str) -> dict:
+    """Batched /people stats payload -> {mlb_id: season stat dict}.
+
+    group 'hitting': {avg, at_bats, hits}.
+    group 'pitching': {era, strikeouts, ip_outs, games_started,
+    games_played} — splits (a player traded mid-season has one per
+    team) are summed; ERA is recomputed from summed earned runs and
+    innings when the splits carry earnedRuns, else the IP-weighted
+    mean of the split ERAs.
+    """
+    out = {}
+    for person in raw.get("people", []):
+        mlb_id = person.get("id")
+        for s in person.get("stats", []):
+            splits = s.get("splits", [])
+            if group == "hitting":
+                ab = hits = 0
+                avg = None
+                for sp in splits:
+                    stat = sp.get("stat", {})
+                    ab += stat.get("atBats", 0) or 0
+                    hits += stat.get("hits", 0) or 0
+                    if avg is None and stat.get("avg"):
+                        try:
+                            avg = float(stat["avg"])
+                        except (TypeError, ValueError):
+                            avg = None
+                if avg is None and ab:
+                    avg = hits / ab
+                out[mlb_id] = {"avg": avg, "at_bats": ab, "hits": hits}
+            else:
+                so = outs = gs = games = 0
+                earned = 0.0
+                era_weighted = 0.0
+                era_outs = 0
+                for sp in splits:
+                    stat = sp.get("stat", {})
+                    sp_outs = _ip_to_outs(stat.get("inningsPitched"))
+                    so += stat.get("strikeOuts", 0) or 0
+                    outs += sp_outs
+                    gs += stat.get("gamesStarted", 0) or 0
+                    games += stat.get("gamesPlayed", 0) or 0
+                    if stat.get("earnedRuns") is not None:
+                        earned += stat["earnedRuns"]
+                    if stat.get("era") is not None:
+                        try:
+                            era_weighted += float(stat["era"]) * sp_outs
+                            era_outs += sp_outs
+                        except (TypeError, ValueError):
+                            pass
+                if earned and outs:
+                    era = earned * 27.0 / outs
+                elif era_outs:
+                    era = era_weighted / era_outs
+                else:
+                    era = None
+                out[mlb_id] = {"era": era, "strikeouts": so,
+                               "ip_outs": outs, "games_started": gs,
+                               "games_played": games}
+    return out
+
+
 def fetch_live_feed(game_pk: int) -> dict:
     """Raw live feed payload (v1.1)."""
     return _get_json(f"{LIVE_BASE_URL}/game/{game_pk}/feed/live")

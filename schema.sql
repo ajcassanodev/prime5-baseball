@@ -150,3 +150,47 @@ CREATE TABLE IF NOT EXISTS auto_pick_declines (
     PRIMARY KEY (member_id, season, week, slot),
     FOREIGN KEY (member_id) REFERENCES members (id)
 );
+
+-- Pick-help form (Nov 25, 2026): per-week, per-player form computed
+-- by the poller from the week's boxscores + season stats, so the
+-- pick page reads from the DB, never from live APIs per request.
+-- season_avg is NULL when the player has no season stats (a
+-- September call-up, for example); hit_prob_pct / five_k_prob_pct
+-- are NULL when the formula can't produce a number. v1 hit streaks
+-- come from the fetched 7-day window and can be truncated if the
+-- streak started before the window (see app/form_guide.py).
+CREATE TABLE IF NOT EXISTS player_form (
+    season INTEGER NOT NULL,
+    week INTEGER NOT NULL,
+    mlb_id INTEGER NOT NULL,
+    is_pitcher INTEGER NOT NULL DEFAULT 0,
+    hits_last_7d INTEGER NOT NULL DEFAULT 0,
+    ab_last_7d INTEGER NOT NULL DEFAULT 0,
+    streak INTEGER NOT NULL DEFAULT 0,
+    season_avg REAL,
+    hit_prob_pct INTEGER,
+    last_start_pitches INTEGER,
+    last_start_k INTEGER,
+    five_k_prob_pct INTEGER,
+    computed_at TEXT NOT NULL,
+    PRIMARY KEY (season, week, mlb_id),
+    FOREIGN KEY (season, week) REFERENCES weeks (season, week)
+);
+
+-- Game-day weather (Nov 25, 2026): one row per Friday game, fetched
+-- by the poller from Open-Meteo at the first-pitch hour. temp_f /
+-- conditions / wind_* are NULL when the forecast has no value for
+-- that hour; precip_prob is NULL for archive-fallback rows (the
+-- archive carries no precipitation probability).
+CREATE TABLE IF NOT EXISTS game_weather (
+    game_pk INTEGER PRIMARY KEY,
+    venue TEXT,
+    temp_f INTEGER,
+    conditions TEXT,
+    precip_prob INTEGER,
+    wind_mph INTEGER,
+    wind_compass TEXT,
+    delay_risk INTEGER NOT NULL DEFAULT 0,
+    computed_at TEXT NOT NULL,
+    FOREIGN KEY (game_pk) REFERENCES games (game_pk)
+);
