@@ -47,10 +47,10 @@
     </button>
     <div class="game-rows{% if not loop.first %} collapsed{% endif %}" data-game-rows="b-{{ g.game_pk }}">
     {% for b in g.batters %}
-    <button type="button" class="row batter-row" data-id="{{ b.mlb_id }}" data-game="{{ b.game_pk }}" data-slot="{{ b.slot or '' }}">
+    <button type="button" class="row batter-row" data-id="{{ b.mlb_id }}" data-game="{{ b.game_pk }}" data-slot="{{ b.slot or '' }}" data-auto="{{ '1' if b.auto else '0' }}">
       <span class="num"></span>
       <span class="dot {{ b.status }}"></span>
-      <span class="main"><b>{{ b.name }}</b> <span class="sub2">{{ b.team }} · {{ b.position }}</span><br>
+      <span class="main"><b>{{ b.name }}</b>{% if b.auto %} <span class="tag auto">AUTO</span>{% endif %} <span class="sub2">{{ b.team }} · {{ b.position }}</span><br>
       <span class="sub2">{{ g.time_et }} · vs {{ b.vs or "TBD" }}</span></span>
       <span class="right">{% if b.status == "out" %}Not in lineup{% elif b.points is not none %}{{ b.hits }} H · {{ '%g'|format(b.points) }} pts{% else %}—{% endif %}</span>
     </button>
@@ -67,10 +67,10 @@
     </button>
     <div class="game-rows{% if not loop.first %} collapsed{% endif %}" data-game-rows="p-{{ g.game_pk }}">
     {% for p in g.pitchers %}
-    <button type="button" class="row pitcher-row" data-id="{{ p.mlb_id }}" data-game="{{ p.game_pk }}" data-slot="{{ p.slot or '' }}">
+    <button type="button" class="row pitcher-row" data-id="{{ p.mlb_id }}" data-game="{{ p.game_pk }}" data-slot="{{ p.slot or '' }}" data-auto="{{ '1' if p.auto else '0' }}">
       <span class="num"></span>
       <span class="dot {{ p.status }}"></span>
-      <span class="main"><b>{{ p.name }}</b> <span class="sub2">{{ p.team }}</span><br>
+      <span class="main"><b>{{ p.name }}</b>{% if p.auto %} <span class="tag auto">AUTO</span>{% endif %} <span class="sub2">{{ p.team }}</span><br>
       <span class="sub2">{{ g.time_et }} · vs {{ p.vs or "TBD" }}</span></span>
       <span class="right">{% if p.points is not none %}{{ p.pitches }} pitches · {{ p.strikeouts }} K · {{ '%.2f'|format(p.points) }} pts{% else %}—{% endif %}</span>
     </button>
@@ -281,14 +281,18 @@ function renderChips() {
   batters.filter(Boolean).forEach(pair => {
     const row = batterRows.find(r => pairOf(r) === pair);
     const name = row ? row.querySelector('.main b').textContent : pair;
+    const auto = row && row.dataset.auto === '1';
     html.push('<button type="button" class="chip" data-remove-batter="'
-      + escHtml(pair) + '">' + escHtml(name) + ' ×</button>');
+      + escHtml(pair) + '">' + escHtml(name)
+      + (auto ? ' <span class="tag auto">AUTO</span>' : '') + ' ×</button>');
   });
   if (pitcher) {
     const row = pitcherRows.find(r => parseInt(r.dataset.id, 10) === pitcher);
     const name = row ? row.querySelector('.main b').textContent : String(pitcher);
+    const auto = row && row.dataset.auto === '1';
     html.push('<button type="button" class="chip pitcher" data-remove-pitcher="1">'
-      + escHtml(name) + ' (P) ×</button>');
+      + escHtml(name) + ' (P)' + (auto ? ' <span class="tag auto">AUTO</span>' : '')
+      + ' ×</button>');
   }
   chips.innerHTML = html.join('');
 }

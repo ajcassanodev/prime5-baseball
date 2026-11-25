@@ -16,6 +16,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from app import auto_pick as auto_pick_mod
 from app import db as dbmod
 from app import mlb as mlb_mod
 
@@ -93,6 +94,19 @@ def main() -> None:
     else:
         week = args.week
     ingest_date(con, season, week, args.date, playground=args.playground)
+    # Auto-pick (Nov 24, 2026): fill opted-in members' empty slots
+    # from the lineups just ingested. A fill failure must never take
+    # down the ingest — the data above is already committed — so it
+    # is reported, not raised.
+    try:
+        filled = auto_pick_mod.auto_fill_week(con, season, week)["filled"]
+    except Exception as exc:  # noqa: BLE001 — ingest already landed
+        print(f"auto-pick failed for {args.date}: {exc}", flush=True)
+    else:
+        total = sum(len(slots) for slots in filled.values())
+        if total:
+            print(f"auto-picked {total} slot(s) for {len(filled)}"
+                  f" member(s) for {args.date}")
     con.close()
 
 

@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS members (
     -- name under the screen name instead of first name + last initial
     -- Division (Nov 24, 2026): 'red' = Red Hots, 'white' = White Hots.
     division TEXT NOT NULL DEFAULT 'red',
+    -- Auto-pick (Nov 24, 2026): 1 = the poller fills the member's
+    -- empty slots from Friday's lineup (random draw); off by default.
+    auto_pick INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
 
@@ -96,6 +99,8 @@ CREATE TABLE IF NOT EXISTS player_game_stats (
 );
 
 -- Member picks. slot: b1..b5 (batters), p1 (pitcher). kind: 'batter' | 'pitcher'.
+-- auto: 1 when the pick was filled by the auto-picker (Nov 24, 2026),
+-- 0 for a member-chosen pick.
 CREATE TABLE IF NOT EXISTS picks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     member_id INTEGER NOT NULL,
@@ -105,6 +110,7 @@ CREATE TABLE IF NOT EXISTS picks (
     kind TEXT NOT NULL,
     mlb_id INTEGER NOT NULL,
     game_pk INTEGER NOT NULL,
+    auto INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE (member_id, season, week, slot),
@@ -129,5 +135,18 @@ CREATE TABLE IF NOT EXISTS head_to_head_grants (
     use_week INTEGER NOT NULL,
     used INTEGER NOT NULL DEFAULT 0,
     UNIQUE (season, week_earned, member_id),
+    FOREIGN KEY (member_id) REFERENCES members (id)
+);
+
+-- Auto-pick declines (Nov 24, 2026): when a member's submit drops a
+-- pick the auto-picker had filled, the slot is recorded here and the
+-- poller never fills that slot again for that member-week. Slot
+-- numbers are the ones in force when the pick was dropped.
+CREATE TABLE IF NOT EXISTS auto_pick_declines (
+    member_id INTEGER NOT NULL,
+    season INTEGER NOT NULL,
+    week INTEGER NOT NULL,
+    slot TEXT NOT NULL,
+    PRIMARY KEY (member_id, season, week, slot),
     FOREIGN KEY (member_id) REFERENCES members (id)
 );

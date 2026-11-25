@@ -43,9 +43,16 @@ def init_db() -> None:
         # Divisions (Nov 24, 2026): 'red' = Red Hots, 'white' = White
         # Hots. Existing rows default to Red Hots.
         ("division", "TEXT NOT NULL DEFAULT 'red'"),
+        # Auto-pick (Nov 24, 2026): 1 = the poller fills the member's
+        # empty slots from Friday's lineup. Off by default.
+        ("auto_pick", "INTEGER NOT NULL DEFAULT 0"),
     ):
         if col not in cols:
             con.execute(f"ALTER TABLE members ADD COLUMN {col} {ddl}")
+    pick_cols = [r[1] for r in con.execute("PRAGMA table_info(picks)")]
+    if "auto" not in pick_cols:
+        con.execute(
+            "ALTER TABLE picks ADD COLUMN auto INTEGER NOT NULL DEFAULT 0")
     con.commit()
     con.close()
 
@@ -141,6 +148,12 @@ def display_sub(member_row) -> str:
 
 def set_show_full_name(con, member_id: int, value: bool) -> None:
     con.execute("UPDATE members SET show_full_name = ? WHERE id = ?",
+                (1 if value else 0, member_id))
+    con.commit()
+
+
+def set_auto_pick(con, member_id: int, value: bool) -> None:
+    con.execute("UPDATE members SET auto_pick = ? WHERE id = ?",
                 (1 if value else 0, member_id))
     con.commit()
 
@@ -254,6 +267,28 @@ def use_grant(con, grant_id: int) -> None:
     con.execute("UPDATE head_to_head_grants SET used = 1 WHERE id = ?",
                 (grant_id,))
     con.commit()
+
+
+# ---------------------------------------------------------------- auto-pick declines
+
+def record_auto_decline(con, member_id: int, season: int, week: int,
+                        slot: str) -> None:
+    """The member dropped an auto-filled pick from `slot` — the
+    poller must never fill that slot again for this member-week."""
+    con.execute(
+        "INSERT OR IGNORE INTO auto_pick_declines"
+        " (member_id, season, week, slot) VALUES (?, ?, ?, ?)",
+        (member_id, season, week, slot),
+    )
+    con.commit()
+
+
+def auto_declined_slots(con, member_id: int, season: int, week: int) -> set:
+    rows = con.execute(
+        "SELECT slot FROM auto_pick_declines WHERE member_id = ?"
+        " AND season = ? AND week = ?",
+        (member_id, season, week)).fetchall()
+    return {r["slot"] for r in rows}
 
 
 # ---------------------------------------------------------------- weeks / games
@@ -450,15 +485,19 @@ def picks_for_member_week(con, member_id: int, season: int, week: int) -> list:
 
 
 def save_pick(con, member_id: int, season: int, week: int, slot: str,
-              kind: str, mlb_id: int, game_pk: int) -> None:
+              kind: str, mlb_id: int, game_pk: int,
+              auto: bool = False) -> None:
     now = utcnow_iso()
     con.execute(
         "INSERT INTO picks (member_id, season, week, slot, kind, mlb_id,"
-        " game_pk, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        " game_pk, auto, created_at, updated_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT(member_id, season, week, slot) DO UPDATE SET"
         " kind = excluded.kind, mlb_id = excluded.mlb_id,"
-        " game_pk = excluded.game_pk, updated_at = excluded.updated_at",
-        (member_id, season, week, slot, kind, mlb_id, game_pk, now, now),
+        " game_pk = excluded.game_pk, auto = excluded.auto,"
+        " updated_at = excluded.updated_at",
+        (member_id, season, week, slot, kind, mlb_id, game_pk,
+         1 if auto else 0, now, now),
     )
     con.commit()
 

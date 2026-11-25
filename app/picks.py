@@ -141,6 +141,10 @@ def submit_picks(con, member_id: int, season: int, week: int,
     )
     existing = {p["slot"]: p for p in
                 dbmod.picks_for_member_week(con, member_id, season, week)}
+    # An auto-filled pick the member keeps stays tagged AUTO (they
+    # didn't choose it); a pick they chose themselves stays manual.
+    auto_by_pair = {(p["mlb_id"], p["game_pk"]): bool(p.get("auto"))
+                    for p in existing.values()}
     frozen, saved = [], []
     for slot, kind, player in desired:
         game = checked["games"][player["game_pk"]]
@@ -154,7 +158,9 @@ def submit_picks(con, member_id: int, season: int, week: int,
                     f"{player['name']}'s game has already started.")
             continue
         dbmod.save_pick(con, member_id, season, week, slot, kind,
-                        player["mlb_id"], player["game_pk"])
+                        player["mlb_id"], player["game_pk"],
+                        auto=auto_by_pair.get(
+                            (player["mlb_id"], player["game_pk"]), False))
         saved.append(slot)
     # A 5-batter submission drops a leftover 6th batter from an earlier
     # bonus submission — unless that game's already started, in which
@@ -167,5 +173,14 @@ def submit_picks(con, member_id: int, season: int, week: int,
                         and _parse_utc(game6["game_date_utc"]) <= now)
             if playground or not started6:
                 dbmod.delete_pick(con, member_id, season, week, "b6")
+    # Auto-pick declines: any previously auto-filled pick that is no
+    # longer in the stored set was cleared by the member — record its
+    # slot so the poller never fills it again this week. Frozen picks
+    # are still stored, so they are never declined.
+    stored_pairs = {(p["mlb_id"], p["game_pk"]) for p in
+                    dbmod.picks_for_member_week(con, member_id, season, week)}
+    for p in existing.values():
+        if p.get("auto") and (p["mlb_id"], p["game_pk"]) not in stored_pairs:
+            dbmod.record_auto_decline(con, member_id, season, week, p["slot"])
     return {"saved": saved, "frozen": frozen,
             "batters": checked["batters"], "pitcher": checked["pitcher"]}

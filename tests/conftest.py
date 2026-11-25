@@ -23,9 +23,9 @@ def no_mlb_network(monkeypatch):
     monkeypatch.setattr(mlb_mod, "fetch_schedule", _boom)
 
 
-_TABLES = ["head_to_head_grants", "picks", "player_game_stats",
-           "lineups", "rosters", "games", "players", "weeks",
-           "settings", "members"]
+_TABLES = ["head_to_head_grants", "auto_pick_declines", "picks",
+           "player_game_stats", "lineups", "rosters", "games", "players",
+           "weeks", "settings", "members"]
 
 
 @pytest.fixture()

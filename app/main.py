@@ -65,6 +65,7 @@ def _current_member(request: Request):
     member["display_sub"] = dbmod.display_sub(member)
     member["division"] = member.get("division") or "red"
     member["division_name"] = dbmod.division_display(member["division"])
+    member["auto_pick"] = bool(member.get("auto_pick"))
     return member
 
 
@@ -331,6 +332,12 @@ def _pick_page_data(con, member, season, week):
     # has one row per game, and each row is its own pick.
     my_ids = {(p["game_pk"], p["mlb_id"]): p["slot"] for p in mine.values()}
 
+    def _auto_for(game_pk, mlb_id):
+        """True when the member's pick for this (game, player) was
+        filled by the auto-picker — shown with an AUTO tag."""
+        slot = my_ids.get((game_pk, mlb_id))
+        return bool(slot and mine[slot].get("auto"))
+
     groups = []
     for g in games:
         starters = dbmod.game_starter_names(con, g["game_pk"])
@@ -359,6 +366,7 @@ def _pick_page_data(con, member, season, week):
                                if stat else None),
                     "vs": opp["name"],
                     "slot": my_ids.get((g["game_pk"], player["mlb_id"])),
+                    "auto": _auto_for(g["game_pk"], player["mlb_id"]),
                 })
             else:
                 order = (game_lineup["batting_order"].index(player["mlb_id"])
@@ -376,6 +384,7 @@ def _pick_page_data(con, member, season, week):
                     "points": (batter_points(stat["hits"]) if stat else None),
                     "vs": opp["name"],
                     "slot": my_ids.get((g["game_pk"], player["mlb_id"])),
+                    "auto": _auto_for(g["game_pk"], player["mlb_id"]),
                 })
         batters.sort(key=lambda b: (b["status"] != "in", b["order"], b["name"]))
         pitchers.sort(key=lambda p: p["name"])
@@ -442,8 +451,10 @@ def welcome_seen(request: Request):
 
 @app.post("/settings")
 async def update_settings(request: Request):
-    """Flip the signed-in member's "Show my full name" setting.
-    Body: {"show_full_name": true/false}."""
+    """Flip the signed-in member's settings. Body may carry
+    {"show_full_name": bool} and/or {"auto_pick": bool} — each key
+    present must be a bool, unknown keys and an empty body are 400.
+    Only the keys sent are applied and echoed back."""
     member = _need_member(request)
     if member is None:
         return RedirectResponse("/locked", status_code=303)
@@ -451,17 +462,25 @@ async def update_settings(request: Request):
         body = await request.json()
     except Exception:
         return JSONResponse({"detail": "invalid JSON"}, status_code=400)
-    value = body.get("show_full_name") if isinstance(body, dict) else None
-    if not isinstance(value, bool):
+    allowed = {"show_full_name", "auto_pick"}
+    if (not isinstance(body, dict) or not body
+            or set(body) - allowed
+            or any(not isinstance(v, bool) for v in body.values())):
         return JSONResponse(
-            {"detail": "show_full_name must be true or false"},
+            {"detail": "settings must be true or false"},
             status_code=400)
     con = dbmod.connect()
     try:
-        dbmod.set_show_full_name(con, member["id"], value)
+        updated = {}
+        if "show_full_name" in body:
+            dbmod.set_show_full_name(con, member["id"], body["show_full_name"])
+            updated["show_full_name"] = body["show_full_name"]
+        if "auto_pick" in body:
+            dbmod.set_auto_pick(con, member["id"], body["auto_pick"])
+            updated["auto_pick"] = body["auto_pick"]
     finally:
         con.close()
-    return {"ok": True, "show_full_name": value}
+    return {"ok": True, **updated}
 
 
 @app.post("/picks", response_class=HTMLResponse)
