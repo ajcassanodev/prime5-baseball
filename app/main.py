@@ -30,6 +30,7 @@ from . import lineup as lineup_mod
 from . import matchups as matchups_mod
 from . import mlb as mlb_mod
 from . import picks as picks_mod
+from . import ticker as ticker_mod
 from .scoring import batter_points, pitcher_points, week_points
 
 COOKIE_NAME = "prime5bb_pick"
@@ -670,6 +671,9 @@ def dashboard(request: Request):
         matchups_mod.award_grants_through(con, season, week["week"])
         h2h = matchups_mod.dashboard_matchup(con, member, season,
                                              week["week"])
+        # Live ticker (Nov 25, 2026): headline, H2H, bonuses,
+        # member streaks, scoreboard — dashboard only, above the cards.
+        ticker = ticker_mod.ticker_data(con, member, season, week["week"])
         return _render(request, "dashboard.html",
                        {"member": member, "season": season, "week": week,
                         "week_label": week.get("label") or f"Week {week['week']}",
@@ -688,7 +692,28 @@ def dashboard(request: Request):
                         "streak": dbmod.hit_streak(con, member["id"], season,
                                                    week["week"]),
                         "h2h": h2h,
+                        "ticker": ticker,
                         "next_lock": _next_lock_label(week["friday_date"])})
+    finally:
+        con.close()
+
+
+@app.get("/dashboard.json")
+def dashboard_json(request: Request):
+    """The ticker's poll endpoint: the same payload the dashboard
+    renders, so the scoreboard can drop open on a new big play
+    without a reload. 60s polling, DB only — never live APIs."""
+    member = _need_member(request)
+    if member is None:
+        return JSONResponse({"error": "locked"}, status_code=303)
+    con = dbmod.connect()
+    try:
+        season, week = _current_week_or_none(con)
+        if week is None:
+            return JSONResponse({"ticker": None})
+        matchups_mod.award_grants_through(con, season, week["week"])
+        return JSONResponse(
+            ticker_mod.ticker_data(con, member, season, week["week"]))
     finally:
         con.close()
 

@@ -10,6 +10,58 @@
   <div class="dash-badge">{{ week_label }}</div>
 </div>
 
+{% if ticker %}
+{% macro tk_items(items, hidden=false) -%}
+  {%- for item in items %}
+  {%- if item.label %}<span class="tk-chip"{% if hidden %} aria-hidden="true"{% endif %}>{{ item.label }}</span><span class="tk-item{% if item.label == 'HEADLINE' %} gold{% endif %}"{% if hidden %} aria-hidden="true"{% endif %}>{{ item.text }}</span>{% else %}<span class="tk-item"{% if hidden %} aria-hidden="true"{% endif %}>{{ item.text }}</span>{% endif %}
+  {%- endfor %}
+{%- endmacro %}
+<div class="tk-strip"><div class="tk-track" id="tkTrack">{{ tk_items(ticker.strip_items) }}{{ tk_items(ticker.strip_items, true) }}</div></div>
+
+<div class="tk-status">
+  <span>WEEK TOTAL <b id="tkTotal">{{ '%.2f'|format(ticker.status.total) }}</b> PTS</span>
+  <span>STREAK <b id="tkStreak">{{ ticker.status.streak }}</b></span>
+  <span>{{ ticker.status.division_name|upper }} <b id="tkRank">{{ ticker.status.rank_ordinal }}</b></span>
+</div>
+
+<div class="tk-mile">
+  <div class="tk-mlabel"><span id="tkMlabel">{{ ticker.milestone.stage_label }}</span><span id="tkMcount">{{ ticker.milestone.progress }} / {{ ticker.milestone.target }}</span></div>
+  <div class="tk-mbar"><div class="tk-mfill" id="tkMfill" style="width:{{ ticker.milestone.pct }}%"></div></div>
+  <div class="tk-mreward" id="tkMreward">{{ ticker.milestone.reward }}</div>
+</div>
+
+<div class="tk-recap">
+  <div class="dash-cardt">HOW FRIDAY WENT</div>
+  {% if ticker.headline %}
+  <div class="tk-recap-head" id="tkHeadline">{{ ticker.headline.html|safe }}</div>
+  {% endif %}
+  <div id="tkRecapRows">
+    {% if ticker.h2h %}
+    <div class="tk-row"><span><b>H2H vs {{ ticker.h2h.opp_name }}</b> <span class="sub">{{ '· final' if ticker.h2h.final else '· live' }}</span></span><span><b>You {{ '%.2f'|format(ticker.h2h.my) }}</b> – {{ '%.2f'|format(ticker.h2h.opp) }}</span></div>
+    {% endif %}
+    {% for bonus in ticker.bonuses %}
+    <div class="tk-row"><span><b>Bonus given</b></span><span class="tk-gold">{{ bonus }}</span></div>
+    {% endfor %}
+    {% if ticker.streaks %}
+    <div class="tk-row"><span><b>Member streaks 5+</b></span><span>{% for s in ticker.streaks %}{{ s.name }} {{ s.streak }}{% if not loop.last %} · {% endif %}{% endfor %}</span></div>
+    {% endif %}
+    {% if not ticker.headline and not ticker.h2h and not ticker.bonuses and not ticker.streaks %}
+    <p class="sub">Nothing yet — Friday's games haven't started.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="tk-boardwrap" id="tkBoardWrap"{% if not ticker.board %} style="display:none"{% endif %}>
+  <div class="tk-board{% if ticker.board and ticker.board.flash %} homer{% endif %}" id="tkBoard">
+    <div class="tk-live"><span>{% if not ticker.board or ticker.board.kind != 'final' %}<span class="tk-dot"></span>{% endif %}YOUR PICK</span><span id="tkClock">{{ ticker.board.clock if ticker.board else '' }}</span></div>
+    <div class="tk-big" id="tkBig">{{ ticker.board.big if ticker.board else '' }}</div>
+    <div class="tk-play" id="tkPlay">{{ ticker.board.play if ticker.board else '' }}</div>
+    <div class="tk-pts" id="tkPts">{{ ticker.board.pts if ticker.board else '' }}</div>
+    <button type="button" class="tk-dismiss" id="tkDismiss">Dismiss</button>
+  </div>
+</div>
+{% endif %}
+
 <div class="dash-rank">
   <div class="dash-place">#{{ rank or "–" }}</div>
   <div>
@@ -137,6 +189,111 @@
   }
   donut('dash-d1', 'dash-l1', {{ season_pie|tojson }});
   donut('dash-d2', 'dash-l2', {{ week_pie|tojson }});
+})();
+
+// Live ticker (Nov 25, 2026): polls /dashboard.json every 60s so a
+// new big play drops the scoreboard open without a reload. The
+// Dismiss button hides the board until a different play arrives;
+// a failed poll is silent and the next one retries.
+(function () {
+  var wrap = document.getElementById("tkBoardWrap");
+  var board = document.getElementById("tkBoard");
+  var track = document.getElementById("tkTrack");
+  if (!wrap || !board || !track) return;
+  var boardKey = {{ ticker.board_key|tojson }};
+  var stripKey = {{ ticker.strip_key|tojson }};
+  var dismissedKey = null;
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;",
+              "'": "&#39;"}[c];
+    });
+  }
+  function renderBoard(b) {
+    board.classList.toggle("homer", !!b.flash);
+    document.getElementById("tkClock").textContent = b.clock;
+    document.getElementById("tkBig").textContent = b.big;
+    document.getElementById("tkPlay").textContent = b.play;
+    document.getElementById("tkPts").textContent = b.pts;
+    wrap.style.display = "";
+  }
+  var dismiss = document.getElementById("tkDismiss");
+  if (dismiss) dismiss.addEventListener("click", function () {
+    wrap.style.display = "none";
+    dismissedKey = boardKey;
+  });
+  function renderStrip(items) {
+    var html = items.map(function (it) {
+      var out = "";
+      if (it.label) out += '<span class="tk-chip">' + esc(it.label) + "</span>";
+      out += '<span class="tk-item' + (it.label === "HEADLINE" ? " gold" : "") +
+        '">' + esc(it.text) + "</span>";
+      return out;
+    }).join("");
+    track.innerHTML = html + html;
+  }
+  function renderRecap(d) {
+    var head = document.getElementById("tkHeadline");
+    if (head) {
+      // Server-built HTML: names are escaped server-side.
+      if (d.headline) head.innerHTML = d.headline.html;
+      else head.textContent = "";
+    }
+    var rows = document.getElementById("tkRecapRows");
+    if (!rows) return;
+    var html = "";
+    if (d.h2h) {
+      html += '<div class="tk-row"><span><b>H2H vs ' + esc(d.h2h.opp_name) +
+        '</b> <span class="sub">' + (d.h2h.final ? "· final" : "· live") +
+        "</span></span><span><b>You " + d.h2h.my.toFixed(2) + "</b> – " +
+        d.h2h.opp.toFixed(2) + "</span></div>";
+    }
+    d.bonuses.forEach(function (b) {
+      html += '<div class="tk-row"><span><b>Bonus given</b></span>' +
+        '<span class="tk-gold">' + esc(b) + "</span></div>";
+    });
+    if (d.streaks && d.streaks.length) {
+      html += '<div class="tk-row"><span><b>Member streaks 5+</b></span><span>' +
+        d.streaks.map(function (s) { return esc(s.name) + " " + s.streak; }).join(" · ") +
+        "</span></div>";
+    }
+    if (!d.headline && !d.h2h && !d.bonuses.length &&
+        !(d.streaks && d.streaks.length)) {
+      html += '<p class="sub">Nothing yet — Friday\'s games haven\'t started.</p>';
+    }
+    rows.innerHTML = html;
+  }
+  setInterval(function () {
+    fetch("/dashboard.json").then(function (r) {
+      if (!r.ok) throw new Error("bad status");
+      return r.json();
+    }).then(function (d) {
+      if (!d || !d.status) return;
+      var totalEl = document.getElementById("tkTotal");
+      if (totalEl) totalEl.textContent = d.status.total.toFixed(2);
+      var streakEl = document.getElementById("tkStreak");
+      if (streakEl) streakEl.textContent = d.status.streak;
+      var rankEl = document.getElementById("tkRank");
+      if (rankEl) rankEl.textContent = d.status.rank_ordinal || "–";
+      var m = d.milestone;
+      if (m) {
+        document.getElementById("tkMlabel").textContent = m.stage_label;
+        document.getElementById("tkMcount").textContent = m.progress + " / " + m.target;
+        document.getElementById("tkMfill").style.width = m.pct + "%";
+        document.getElementById("tkMreward").textContent = m.reward;
+      }
+      if (d.strip_key && d.strip_key !== stripKey) {
+        stripKey = d.strip_key;
+        renderStrip(d.strip_items);
+        renderRecap(d);
+      }
+      if (d.board && d.board_key && d.board_key !== boardKey &&
+          d.board_key !== dismissedKey) {
+        boardKey = d.board_key;
+        renderBoard(d.board);
+      }
+    }).catch(function () { /* next poll retries */ });
+  }, 60000);
 })();
 </script>
 {% endblock %}

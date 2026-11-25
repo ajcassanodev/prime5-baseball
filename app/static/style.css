@@ -366,3 +366,40 @@ a.h2h-pair:hover { background: var(--surface-muted); border-radius: 8px; }
 .row .right .prob { color: var(--accent); font-weight: 700; font-size: 16px; }
 .row .right .sub2 { color: var(--muted); font-size: 11px; }
 .dash-foot { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 8px; font-size: 13px; }
+
+/* Live Friday-night ticker (Nov 25, 2026, mock v5) — dashboard only,
+   above the cards. The strip is a CSS marquee: the track holds two
+   identical copies of the items and scrolls -50%, so the loop is
+   seamless. Items carry margin-right (not flex gap) so each copy is
+   exactly half the track width. */
+.tk-strip { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 0; overflow: hidden; white-space: nowrap; font-size: 12px; margin-bottom: 12px; }
+.tk-track { display: inline-flex; align-items: center; animation: tk-tick 36s linear infinite; will-change: transform; }
+@keyframes tk-tick { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.tk-chip { background: var(--accent); color: var(--accent-text); font-weight: 800; font-size: 11px; letter-spacing: .08em; padding: 3px 8px; border-radius: 4px; flex-shrink: 0; margin-right: 16px; }
+.tk-item { color: var(--muted); flex-shrink: 0; margin-right: 16px; }
+.tk-item.gold { color: var(--accent); font-weight: 700; }
+.tk-status { display: flex; justify-content: space-around; gap: 8px; padding: 10px 16px; font-size: 12px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.tk-status b { color: var(--accent); font-size: 15px; }
+.tk-mile { padding: 10px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; }
+.tk-mlabel { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: .08em; }
+.tk-mlabel span:first-child { color: var(--accent); font-weight: 700; }
+.tk-mbar { height: 8px; background: var(--border); border-radius: 999px; margin-top: 6px; overflow: hidden; }
+.tk-mfill { height: 100%; background: linear-gradient(90deg, var(--accent), #ffb000); border-radius: 999px; }
+.tk-mreward { font-size: 11px; color: var(--muted); margin-top: 5px; }
+.tk-recap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.tk-recap-head { font-weight: 700; font-size: 15px; line-height: 1.5; margin-bottom: 10px; }
+.tk-div-red { color: var(--accent); }
+.tk-div-white { color: #ffffff; }
+.tk-row { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--surface-muted); border-radius: 6px; margin-top: 6px; font-size: 13px; }
+.tk-row .sub { color: var(--muted); font-size: 12px; }
+.tk-gold { color: var(--accent); font-weight: 700; }
+.tk-boardwrap { margin-bottom: 12px; }
+.tk-board { background: #05070a; border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+.tk-board.homer { animation: tk-flash 1.1s ease; }
+@keyframes tk-flash { 0% { box-shadow: 0 0 0 rgba(212,160,23,0); } 25% { box-shadow: 0 0 28px rgba(212,160,23,.85); } 100% { box-shadow: 0 0 0 rgba(212,160,23,0); } }
+.tk-live { display: flex; justify-content: space-between; align-items: center; font-size: 11px; letter-spacing: .14em; color: #ff5a5a; margin-bottom: 8px; }
+.tk-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff5a5a; margin-right: 6px; box-shadow: 0 0 8px #ff5a5a; }
+.tk-big { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 30px; letter-spacing: .06em; color: #ffb000; text-shadow: 0 0 10px rgba(255,176,0,.55); line-height: 1.1; }
+.tk-play { font-size: 13.5px; color: #e8e8e8; margin-top: 6px; line-height: 1.5; }
+.tk-pts { margin-top: 10px; font-size: 14px; color: var(--accent); font-weight: 700; }
+.tk-dismiss { margin-top: 10px; background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }

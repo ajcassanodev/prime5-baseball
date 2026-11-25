@@ -312,8 +312,12 @@ def test_standings_top5_filtered_to_division(con, client):
                                screen_name="Whit", division="white")
     _save_picks(con, whit["id"], PAGS_PICKS)  # 22.00, but wrong division
     out = _dashboard(client, demo)
-    assert "Pags" in out
-    assert "Whit" not in out
+    # The ticker headlines BOTH divisions (Nov 25, 2026), so "Whit"
+    # appears on the page in the headline — scope the assertion to
+    # the standings card itself.
+    card = out.split("STANDINGS — TOP 5")[1].split("HOW SCORING WORKS")[0]
+    assert "Pags" in card
+    assert "Whit" not in card
 
 
 # ---------------------------------------------------------------- my picks + misc
