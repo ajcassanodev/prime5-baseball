@@ -651,7 +651,10 @@ def dashboard(request: Request):
 @app.get("/matchups", response_class=HTMLResponse)
 def matchups_page(request: Request):
     """Weekly head-to-head: this week's pairings with live scores, and
-    the season records table. Grants are awarded lazily here."""
+    the season records table. Grants are awarded lazily here.
+    ?open=<a>-<b> expands one pairing's detail in place (a drop-down
+    under its row); an invalid open value is ignored and the list
+    renders with nothing open."""
     member = _need_member(request)
     if member is None:
         return RedirectResponse("/locked", status_code=303)
@@ -666,12 +669,23 @@ def matchups_page(request: Request):
         rows, bye = matchups_mod.matchup_rows(con, season, week["week"])
         for r in rows:
             r["mine"] = member["id"] in (r["a"]["id"], r["b"]["id"])
+        detail = None
+        open_param = request.query_params.get("open")
+        if open_param:
+            try:
+                a_id, b_id = (int(x) for x in open_param.split("-", 1))
+            except ValueError:
+                a_id = b_id = None
+            if a_id is not None:
+                detail = matchups_mod.matchup_detail(
+                    con, member["id"], season, week["week"], a_id, b_id)
         records = matchups_mod.head_to_head_records(con, season,
                                                     week["week"])
         return _render(request, "matchups.html",
                        {"member": member, "season": season, "week": week,
                         "week_label": week.get("label") or f"Week {week['week']}",
                         "rows": rows, "bye": bye, "records": records,
+                        "detail": detail,
                         "active_count": len(matchups_mod.active_member_ids(con))})
     finally:
         con.close()

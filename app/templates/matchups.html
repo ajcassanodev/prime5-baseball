@@ -9,8 +9,10 @@
 
 <div class="dash-card">
   <div class="dash-cardt">THIS WEEK'S MATCHUPS</div>
+  <p class="sub" style="margin-top:0;">Tap a matchup to see both lineups — picks reveal once their game starts; your own picks are always visible to you.</p>
   {% for r in rows %}
-  <div class="h2h-pair{% if r.mine %} h2h-mine{% endif %}">
+  {% set is_open = detail and detail.a.id == r.a.id and detail.b.id == r.b.id %}
+  <a class="h2h-pair{% if r.mine %} h2h-mine{% endif %}" href="{% if is_open %}/matchups{% else %}/matchups?open={{ r.a.id }}-{{ r.b.id }}{% endif %}">
     <span class="h2h-side{% if r.final and r.winner == 'a' %} h2h-win{% elif r.final %} h2h-lose{% endif %}"><b>{{ r.a.display_name }}</b>{% if r.a.display_sub %}<span class="display-sub">{{ r.a.display_sub }}</span>{% endif %} {{ '%.2f'|format(r.a_points) }}</span>
     <span class="h2h-vs">vs</span>
     <span class="h2h-side h2h-right{% if r.final and r.winner == 'b' %} h2h-win{% elif r.final %} h2h-lose{% endif %}">{{ '%.2f'|format(r.b_points) }} <b>{{ r.b.display_name }}</b>{% if r.b.display_sub %}<span class="display-sub">{{ r.b.display_sub }}</span>{% endif %}</span>
@@ -18,7 +20,44 @@
       {% if r.winner == 'tie' %}<span class="h2h-tie">Tie — no pick</span>
       {% else %}<span class="h2h-badge">+1 pick</span>{% endif %}
     {% else %}<span class="h2h-live">Live</span>{% endif %}
+    <span class="h2h-chev">{% if is_open %}▾{% else %}▸{% endif %}</span>
+  </a>
+  {% if is_open %}
+  <div class="h2h-detail-wrap open">
+    <div class="h2h-detail-inner">
+      <div class="h2h-detail">
+        <div class="h2h-verdict">{{ detail.verdict }}</div>
+        <div class="h2h-cols">
+          <div class="h2h-col">
+            <div class="h2h-colhead"><b>{{ detail.a.display_name }}</b>{% if detail.a.display_sub %}<span class="display-sub">{{ detail.a.display_sub }}</span>{% endif %} · {{ '%.2f'|format(detail.a_total) }} pts</div>
+            {% for p in detail.a_picks %}
+              {% if p.visible %}
+              <div class="h2h-pick"><span><b>{{ p.name }}</b> <span class="h2h-pickmeta">{{ p.team }} · {{ p.game_label }}</span></span><span>{{ '%.2f'|format(p.points) }}</span></div>
+              {% else %}
+              <div class="h2h-pick h2h-hidden"><span>Hidden until first pitch · {{ p.game_label }} game</span><span>?</span></div>
+              {% endif %}
+            {% else %}
+            <p class="sub">No picks yet.</p>
+            {% endfor %}
+          </div>
+          <div class="h2h-col">
+            <div class="h2h-colhead"><b>{{ detail.b.display_name }}</b>{% if detail.b.display_sub %}<span class="display-sub">{{ detail.b.display_sub }}</span>{% endif %} · {{ '%.2f'|format(detail.b_total) }} pts</div>
+            {% for p in detail.b_picks %}
+              {% if p.visible %}
+              <div class="h2h-pick"><span><b>{{ p.name }}</b> <span class="h2h-pickmeta">{{ p.team }} · {{ p.game_label }}</span></span><span>{{ '%.2f'|format(p.points) }}</span></div>
+              {% else %}
+              <div class="h2h-pick h2h-hidden"><span>Hidden until first pitch · {{ p.game_label }} game</span><span>?</span></div>
+              {% endif %}
+            {% else %}
+            <p class="sub">No picks yet.</p>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="dash-foot"><a href="/matchups">Close ↑</a></div>
+      </div>
+    </div>
   </div>
+  {% endif %}
   {% endfor %}
   {% if bye %}<p class="sub">{{ bye.display_name }} has a bye this week — no matchup, no pick.</p>{% endif %}
 </div>

@@ -14,10 +14,12 @@ repeat rounds 1-12.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from . import db as dbmod
-from .scoring import week_points
+from . import mlb as mlb_mod
+from .picks import _parse_utc
+from .scoring import pick_points, week_points
 
 BASE_SLOTS = ("b1", "b2", "b3", "b4", "b5", "p1")
 REGULAR_WEEKS = 25
@@ -87,6 +89,96 @@ def matchup_points(con, member_id, season, week) -> float:
         [{"kind": p["kind"], "mlb_id": p["mlb_id"], "game_pk": p["game_pk"]}
          for p in picks],
         stats)
+
+
+def game_started(game: dict, now: datetime | None = None) -> bool:
+    """True once the game's first pitch has passed — the same
+    determination as the pick freeze in picks.py (game_date_utc vs
+    now). A game with no date is never started."""
+    if game is None or not game.get("game_date_utc"):
+        return False
+    now = now or datetime.now(timezone.utc)
+    return _parse_utc(game["game_date_utc"]) <= now
+
+
+def visible_picks(con, viewer_id, member_id, season, week,
+                  now: datetime | None = None) -> list:
+    """One side's base lineup with the reveal rule applied (Nov 24,
+    2026 — the element of surprise). Returns slot order b1..b5, p1;
+    each row is {slot, kind, visible, name, team, game_label,
+    points}. A pick is visible when it belongs to the viewer or its
+    game has started; otherwise the row carries NO name at all — the
+    server omits it entirely, so a hidden pick never appears in the
+    HTML (no name, no data attribute, no JSON payload). Points come
+    from the same pick_points scoring path week_points uses; a hidden
+    pick contributes 0 to the side total."""
+    now = now or datetime.now(timezone.utc)
+    picks = [p for p in
+             dbmod.picks_for_member_week(con, member_id, season, week)
+             if p["slot"] in BASE_SLOTS]
+    games = {g["game_pk"]: g
+             for g in dbmod.games_for_week(con, season, week)}
+    stats = dbmod.stats_for_week(con, season, week)
+    own = viewer_id == member_id
+    out = []
+    for p in picks:
+        game = games.get(p["game_pk"])
+        started = game_started(game, now)
+        visible = own or started
+        row = {"slot": p["slot"], "kind": p["kind"], "visible": visible,
+               "game_label": (mlb_mod.first_pitch_et(game["game_date_utc"])
+                              if game else ""),
+               "name": None, "team": "", "points": 0.0}
+        if visible:
+            player = dbmod.player_by_id(con, p["mlb_id"])
+            row["name"] = player["name"] if player else "Unknown"
+            row["team"] = player["team"] if player else ""
+            row["points"] = pick_points(
+                p["kind"], stats.get((p["game_pk"], p["mlb_id"])))
+        out.append(row)
+    return out
+
+
+def matchup_detail(con, viewer_id, season, week, a_id, b_id,
+                   now: datetime | None = None):
+    """Detail for one pairing of the week, or None when a/b aren't
+    actually matched that week. {a, b (member dicts), a_picks,
+    b_picks, a_total, b_total (revealed points only), final,
+    verdict} — verdict is a plain-language line: once final,
+    '<name> wins — +1 pick' or 'Tie — no pick'; while live,
+    '<name> leads by X.XX' or 'Tied'."""
+    pairs, _bye = pairings_for_week(season, week, active_member_ids(con))
+    if (a_id, b_id) not in pairs and (b_id, a_id) not in pairs:
+        return None
+    if (b_id, a_id) in pairs:
+        a_id, b_id = b_id, a_id
+    members = {m["id"]: _with_display(m) for m in active_members(con)}
+    if a_id not in members or b_id not in members:
+        return None
+    a_picks = visible_picks(con, viewer_id, a_id, season, week, now)
+    b_picks = visible_picks(con, viewer_id, b_id, season, week, now)
+    a_total = round(sum(p["points"] for p in a_picks if p["visible"]), 2)
+    b_total = round(sum(p["points"] for p in b_picks if p["visible"]), 2)
+    final = week_final(con, season, week)
+    a_name, b_name = members[a_id]["display_name"], members[b_id]["display_name"]
+    if final:
+        if a_total > b_total:
+            verdict = f"{a_name} wins — +1 batter pick for next week"
+        elif b_total > a_total:
+            verdict = f"{b_name} wins — +1 batter pick for next week"
+        else:
+            verdict = "Tie — no pick"
+    else:
+        if a_total > b_total:
+            verdict = f"{a_name} leads by {a_total - b_total:.2f}"
+        elif b_total > a_total:
+            verdict = f"{b_name} leads by {b_total - a_total:.2f}"
+        else:
+            verdict = "Tied"
+    return {"a": members[a_id], "b": members[b_id],
+            "a_picks": a_picks, "b_picks": b_picks,
+            "a_total": a_total, "b_total": b_total, "final": final,
+            "verdict": verdict}
 
 
 def week_final(con, season, week) -> bool:
