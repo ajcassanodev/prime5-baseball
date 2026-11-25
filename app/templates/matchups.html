@@ -29,7 +29,9 @@
         <div class="h2h-verdict">{{ detail.verdict }}</div>
         <div class="h2h-cols">
           <div class="h2h-col">
-            <div class="h2h-colhead"><b>{{ detail.a.display_name }}</b>{% if detail.a.display_sub %}<span class="display-sub">{{ detail.a.display_sub }}</span>{% endif %} · {{ '%.2f'|format(detail.a_total) }} pts</div>
+            <div class="h2h-colhead"><b>{{ detail.a.display_name }}</b>{% if detail.a.display_sub %}<span class="display-sub">{{ detail.a.display_sub }}</span>{% endif %}</div>
+            <div class="h2h-bigscore{% if detail.a_total > detail.b_total %} h2h-lead{% endif %}">{{ '%.2f'|format(detail.a_total) }}</div>
+            <div class="h2h-scorelabel">total points</div>
             {% for p in detail.a_picks %}
               {% if p.visible %}
               <div class="h2h-pick"><span><b>{{ p.name }}</b> <span class="h2h-pickmeta">{{ p.team }} · {{ p.game_label }}</span></span><span>{{ '%.2f'|format(p.points) }}</span></div>
@@ -42,7 +44,9 @@
           </div>
           <div class="h2h-divider" aria-hidden="true"></div>
           <div class="h2h-col">
-            <div class="h2h-colhead"><b>{{ detail.b.display_name }}</b>{% if detail.b.display_sub %}<span class="display-sub">{{ detail.b.display_sub }}</span>{% endif %} · {{ '%.2f'|format(detail.b_total) }} pts</div>
+            <div class="h2h-colhead"><b>{{ detail.b.display_name }}</b>{% if detail.b.display_sub %}<span class="display-sub">{{ detail.b.display_sub }}</span>{% endif %}</div>
+            <div class="h2h-bigscore{% if detail.b_total > detail.a_total %} h2h-lead{% endif %}">{{ '%.2f'|format(detail.b_total) }}</div>
+            <div class="h2h-scorelabel">total points</div>
             {% for p in detail.b_picks %}
               {% if p.visible %}
               <div class="h2h-pick"><span><b>{{ p.name }}</b> <span class="h2h-pickmeta">{{ p.team }} · {{ p.game_label }}</span></span><span>{{ '%.2f'|format(p.points) }}</span></div>
