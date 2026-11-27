@@ -25,6 +25,27 @@
   {% if is_open %}
   <div class="h2h-detail-wrap open">
     <div class="h2h-detail-inner">
+      {% if detail.kind == 'preview' %}
+      <div class="h2h-detail h2h-preview">
+        <div class="h2h-prev-label">Previous meeting</div>
+        {% if detail.first_meeting %}
+        <div class="h2h-prev-big">First meeting.</div>
+        {% else %}
+        <div class="h2h-prev-big">{{ detail.previous.line }}</div>
+        {% if detail.previous.decided %}<p class="sub" style="margin-top:2px;">{{ detail.previous.decided }}</p>{% endif %}
+        {% endif %}
+        <div class="h2h-prev-grid">
+          <div class="h2h-prev-box"><div class="h2h-prev-label">All-time H2H</div><div><b>{{ detail.h2h_line }}</b></div></div>
+          <div class="h2h-prev-box"><div class="h2h-prev-label">Season record</div><div><b>{{ detail.record_line }}</b></div></div>
+        </div>
+        <div class="h2h-prev-grid">
+          <div class="h2h-prev-box"><div class="h2h-prev-label">{{ detail.a.display_name }} — form</div><div>{% if detail.a_form_line %}{{ detail.a_form_line }}{% else %}<span class="sub">No completed weeks yet.</span>{% endif %}</div></div>
+          <div class="h2h-prev-box"><div class="h2h-prev-label">{{ detail.b.display_name }} — form</div><div>{% if detail.b_form_line %}{{ detail.b_form_line }}{% else %}<span class="sub">No completed weeks yet.</span>{% endif %}</div></div>
+        </div>
+        <p class="sub" style="margin-top:10px;">Winner earns +1 batter pick next week.</p>
+        <div class="dash-foot"><a href="/matchups">Close ↑</a></div>
+      </div>
+      {% else %}
       <div class="h2h-detail">
         <div class="h2h-verdict">{{ detail.verdict }}</div>
         <div class="h2h-cols">
@@ -60,6 +81,7 @@
         </div>
         <div class="dash-foot"><a href="/matchups">Close ↑</a></div>
       </div>
+      {% endif %}
     </div>
   </div>
   {% endif %}

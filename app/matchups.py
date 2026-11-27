@@ -193,6 +193,182 @@ def week_final(con, season, week) -> bool:
     return all(g.get("status") == "Final" for g in games)
 
 
+def week_started(con, season, week, now: datetime | None = None) -> bool:
+    """True once any game in the week has started (first pitch passed).
+    Before that the matchup drop-down shows a preview, not a scoreboard."""
+    games = dbmod.games_for_week(con, season, week)
+    return any(game_started(g, now) for g in games)
+
+
+# ---------------------------------------------------------------- preview
+# Shown in the same drop-down before any game starts (Nov 27, 2026):
+# the previous meeting between the two members, their all-time record,
+# season records, and form. Everything is derived from stored picks and
+# stats — a missing value is omitted, never invented.
+
+def _played_final_weeks(con, member_id, season, current_week):
+    """Final weeks before `current_week` in which the member was paired,
+    newest first: {week, points, opp_points, outcome ('win'|'loss'|
+    'tie')}. A bye week never appears — the member simply didn't play."""
+    ids = active_member_ids(con)
+    out = []
+    for w in range(current_week - 1, 0, -1):
+        if not week_final(con, season, w):
+            continue
+        pairs, _bye = pairings_for_week(season, w, ids)
+        for a, b in pairs:
+            if member_id in (a, b):
+                opp = b if a == member_id else a
+                mine = matchup_points(con, member_id, season, w)
+                theirs = matchup_points(con, opp, season, w)
+                outcome = ("win" if mine > theirs else
+                           ("loss" if theirs > mine else "tie"))
+                out.append({"week": w, "points": mine,
+                            "opp_points": theirs, "outcome": outcome})
+    return out
+
+
+def _member_form(con, member_id, season, current_week):
+    """One member's form line, or None when they have no completed
+    matchup week yet. {week, points, text} — text is 'Won N straight'
+    on a win streak, 'Won last week' on a single win, 'Lost last week'
+    or 'Tied last week' otherwise. Points are the last played week's
+    matchup points (base lineup, same as the matchup itself)."""
+    played = _played_final_weeks(con, member_id, season, current_week)
+    if not played:
+        return None
+    last = played[0]
+    if last["outcome"] == "win":
+        n = 0
+        for r in played:
+            if r["outcome"] == "win":
+                n += 1
+            else:
+                break
+        text = f"Won {n} straight" if n > 1 else "Won last week"
+    elif last["outcome"] == "loss":
+        text = "Lost last week"
+    else:
+        text = "Tied last week"
+    return {"week": last["week"], "points": last["points"], "text": text}
+
+
+def _decided_line(con, winner_id, season, week):
+    """One line on what decided a completed meeting: the winner's
+    top-scoring pick that week. Returns None when the winner scored
+    nothing (no pick to name) — the line is omitted, not filled in."""
+    picks = [p for p in
+             dbmod.picks_for_member_week(con, winner_id, season, week)
+             if p["slot"] in BASE_SLOTS]
+    stats = dbmod.stats_for_week(con, season, week)
+    best = None
+    for p in picks:
+        pts = pick_points(p["kind"],
+                          stats.get((p["game_pk"], p["mlb_id"])))
+        if best is None or pts > best[0]:
+            best = (pts, p)
+    if best is None or best[0] <= 0:
+        return None
+    _pts, p = best
+    player = dbmod.player_by_id(con, p["mlb_id"])
+    name = player["name"] if player else "Unknown"
+    stat = stats.get((p["game_pk"], p["mlb_id"])) or {}
+    if p["kind"] == "batter":
+        hits = stat.get("hits", 0)
+        return (f"{name}'s {hits} hit{'s' if hits != 1 else ''}"
+                " led the way")
+    k = stat.get("strikeouts", 0)
+    return (f"{name}'s {k} strikeout{'s' if k != 1 else ''}"
+            " led the way")
+
+
+def _record_line(rec) -> str:
+    """'3–1' or '3–1–1' when ties exist."""
+    line = f"{rec['wins']}–{rec['losses']}"
+    if rec["ties"]:
+        line += f"–{rec['ties']}"
+    return line
+
+
+def matchup_preview(con, season, week, a_id, b_id):
+    """Preview for an upcoming pairing of the week, or None when a/b
+    aren't actually matched that week. {kind: 'preview', a, b (member
+    dicts), first_meeting, previous, h2h_line, record_line,
+    a_form_line, b_form_line} — previous is None on a first meeting;
+    previous_line/decided live on it when present. Display strings are
+    built here so the template stays dumb."""
+    pairs, _bye = pairings_for_week(season, week, active_member_ids(con))
+    if (a_id, b_id) not in pairs and (b_id, a_id) not in pairs:
+        return None
+    if (b_id, a_id) in pairs:
+        a_id, b_id = b_id, a_id
+    members = {m["id"]: _with_display(m) for m in active_members(con)}
+    if a_id not in members or b_id not in members:
+        return None
+    a_name, b_name = (members[a_id]["display_name"],
+                      members[b_id]["display_name"])
+    # History: final weeks before this one where the pair met.
+    a_wins = b_wins = ties = 0
+    previous = None
+    for w in range(week - 1, 0, -1):
+        if not week_final(con, season, w):
+            continue
+        wpairs, _ = pairings_for_week(season, w, active_member_ids(con))
+        if (a_id, b_id) not in wpairs and (b_id, a_id) not in wpairs:
+            continue
+        pa = matchup_points(con, a_id, season, w)
+        pb = matchup_points(con, b_id, season, w)
+        if pa > pb:
+            a_wins += 1
+            winner, winner_id = "a", a_id
+        elif pb > pa:
+            b_wins += 1
+            winner, winner_id = "b", b_id
+        else:
+            ties += 1
+            winner, winner_id = "tie", None
+        if previous is None:
+            if winner == "a":
+                line = (f"Week {w} — {a_name} won {pa:.2f} – {pb:.2f}")
+            elif winner == "b":
+                line = (f"Week {w} — {b_name} won {pb:.2f} – {pa:.2f}")
+            else:
+                line = f"Week {w} — Tie {pa:.2f} – {pb:.2f}"
+            previous = {"week": w, "a_points": pa, "b_points": pb,
+                        "winner": winner, "line": line,
+                        "decided": (_decided_line(con, winner_id, season, w)
+                                    if winner_id else None)}
+    if a_wins + b_wins + ties == 0:
+        h2h_line = "No meetings yet"
+    elif a_wins == b_wins:
+        h2h_line = f"Tied {a_wins} – {b_wins}"
+    elif a_wins > b_wins:
+        h2h_line = f"{a_name} leads {a_wins} – {b_wins}"
+    else:
+        h2h_line = f"{b_name} leads {b_wins} – {a_wins}"
+    if ties:
+        h2h_line += f" · {ties} tie{'s' if ties != 1 else ''}"
+    records = {r["member"]["id"]: r
+               for r in head_to_head_records(con, season, week)}
+    a_rec = records.get(a_id, {"wins": 0, "losses": 0, "ties": 0})
+    b_rec = records.get(b_id, {"wins": 0, "losses": 0, "ties": 0})
+    record_line = (f"{a_name} {_record_line(a_rec)} · "
+                   f"{b_name} {_record_line(b_rec)}")
+
+    def _form_line(member_id):
+        form = _member_form(con, member_id, season, week)
+        if form is None:
+            return None
+        return (f"Last week {form['points']:.2f} pts · {form['text']}")
+
+    return {"kind": "preview", "a": members[a_id], "b": members[b_id],
+            "first_meeting": previous is None,
+            "previous": previous, "h2h_line": h2h_line,
+            "record_line": record_line,
+            "a_form_line": _form_line(a_id),
+            "b_form_line": _form_line(b_id)}
+
+
 def award_head_to_head_grants(con, season, week):
     """Idempotent: for a final week, one grant per winner (use_week =
     week+1). No grant on ties or byes."""

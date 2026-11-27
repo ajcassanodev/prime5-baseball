@@ -747,8 +747,15 @@ def matchups_page(request: Request):
             except ValueError:
                 a_id = b_id = None
             if a_id is not None:
-                detail = matchups_mod.matchup_detail(
-                    con, member["id"], season, week["week"], a_id, b_id)
+                # Before any game starts the drop-down shows the
+                # matchup preview (history, records, form); once the
+                # week is underway it shows the live detail.
+                if matchups_mod.week_started(con, season, week["week"]):
+                    detail = matchups_mod.matchup_detail(
+                        con, member["id"], season, week["week"], a_id, b_id)
+                else:
+                    detail = matchups_mod.matchup_preview(
+                        con, season, week["week"], a_id, b_id)
         records = matchups_mod.head_to_head_records(con, season,
                                                     week["week"])
         return _render(request, "matchups.html",
