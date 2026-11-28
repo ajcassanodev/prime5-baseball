@@ -9,10 +9,26 @@ Usage (from the project root):
   batting order, per-player stats, and the full game roster.
 - Creates the week row if needed (week looked up by Friday date first).
 - Safe to re-run: upserts only.
+
+Daily driver (no --date: the systemd timer calls it this way, every
+15 minutes — see deploy/prime5bb-staging-poll.service, whose comment
+already said poll.py defaults to today):
+- Tuesday: rotate the playground to a new random 2026 Friday
+  (app/rotation.py), if due. No ingest — ingesting a Tuesday would
+  invent a week.
+- Friday: ingest today, but only when the schedule has games, so
+  offseason Fridays don't create empty weeks.
+- Any other day: no-op.
+
+    venv/bin/python poller/poll.py --rotate [--date 2026-12-01]
+
+Runs the playground rotation check for that Tuesday (default: today)
+on demand, e.g. to force the first rotation early.
 """
 import argparse
 import os
 import sys
+from datetime import date
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -20,6 +36,7 @@ from app import auto_pick as auto_pick_mod
 from app import db as dbmod
 from app import form_ingest as form_ingest_mod
 from app import mlb as mlb_mod
+from app import rotation as rotation_mod
 
 
 def ingest_date(con, season: int, week: int, friday_date: str,
@@ -70,16 +87,72 @@ def ingest_date(con, season: int, week: int, friday_date: str,
           f" (season {season}, week {week})")
 
 
-def main() -> None:
+def _report_rotation(result: dict) -> None:
+    if result["rotated"]:
+        print(f"playground rotated to {result['friday']}:"
+              f" {result['games']} games, {result['form']} form rows,"
+              f" {result['weather']} weather rows")
+        if result["refresh_error"]:
+            print(f"playground form/weather incomplete:"
+                  f" {result['refresh_error']}")
+    else:
+        print(f"playground rotation skipped: {result['reason']}")
+
+
+def main(argv=None, today: date | None = None) -> None:
+    """argv: CLI args (None = sys.argv). today: the date to act as
+    (None = today in America/New_York) — injected by tests so the
+    dispatch is deterministic regardless of the real run date."""
     ap = argparse.ArgumentParser()
-    ap.add_argument("--date", required=True, help="Friday date YYYY-MM-DD")
+    ap.add_argument("--date", default=None,
+                    help="Friday date YYYY-MM-DD (default: today, ET)")
     ap.add_argument("--season", type=int, default=None)
     ap.add_argument("--week", type=int, default=None)
     ap.add_argument("--playground", action="store_true",
                     help="mark the week as a playground (sandbox) week")
-    args = ap.parse_args()
+    ap.add_argument("--rotate", action="store_true",
+                    help="run the playground Tuesday rotation check"
+                    " instead of ingesting (for --date, that Tuesday)")
+    args = ap.parse_args(argv)
     dbmod.init_db()
     con = dbmod.connect()
+    try:
+        if args.rotate:
+            target = (date.fromisoformat(args.date) if args.date
+                      else (today or rotation_mod.today_et()))
+            _report_rotation(rotation_mod.rotate(con, target))
+            return
+        if args.date is None:
+            # Daily driver: Tuesdays rotate, Fridays ingest, other
+            # days do nothing.
+            day = today or rotation_mod.today_et()
+            if day.weekday() == 1:  # Tuesday
+                _report_rotation(rotation_mod.rotate(con, day))
+                return
+            if day.weekday() != 4:  # not Friday either
+                print(f"poll: {day.isoformat()} is not a Tuesday or"
+                      " Friday — nothing to do")
+                return
+            # Friday: only ingest when the schedule has games, so
+            # offseason Fridays don't create empty weeks.
+            try:
+                games = mlb_mod.parse_schedule(
+                    mlb_mod.fetch_schedule(day.isoformat()))
+            except mlb_mod.MlbError as exc:
+                print(f"poll: schedule fetch failed for"
+                      f" {day.isoformat()}: {exc}")
+                return
+            if not games:
+                print(f"poll: no games on {day.isoformat()} —"
+                      " nothing to ingest")
+                return
+            args.date = day.isoformat()
+        _ingest(con, args)
+    finally:
+        con.close()
+
+
+def _ingest(con, args) -> None:
     season = args.season or dbmod.current_season(con)
     if args.week is None:
         row = con.execute(
@@ -123,7 +196,6 @@ def main() -> None:
         if total:
             print(f"auto-picked {total} slot(s) for {len(filled)}"
                   f" member(s) for {args.date}")
-    con.close()
 
 
 if __name__ == "__main__":

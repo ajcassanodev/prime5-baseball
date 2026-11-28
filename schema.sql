@@ -194,3 +194,16 @@ CREATE TABLE IF NOT EXISTS game_weather (
     computed_at TEXT NOT NULL,
     FOREIGN KEY (game_pk) REFERENCES games (game_pk)
 );
+
+-- Playground rotation (Nov 27, 2026): the eligible-Friday pool and
+-- which Fridays have been drawn. One row per eligible 2026 Friday
+-- (10+ scheduled games, doubleheaders counted game by game); games
+-- is the scheduled-game count that day; drawn_on is the Tuesday
+-- (YYYY-MM-DD) that drew it, NULL until drawn. The current
+-- playground week (Sep 25, 2026) is recorded as drawn when the pool
+-- is first built, so it is never redrawn.
+CREATE TABLE IF NOT EXISTS playground_fridays (
+    friday_date TEXT PRIMARY KEY,  -- YYYY-MM-DD, an eligible Friday
+    games INTEGER NOT NULL,        -- scheduled games that day
+    drawn_on TEXT                  -- Tuesday (YYYY-MM-DD) that drew it, NULL until drawn
+);
